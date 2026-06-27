@@ -2,6 +2,8 @@
 
 衛星による全世界陸域撮影プロジェクトの進捗管理・次オーダー決定UIです。
 
+TLE軌道情報をもとにパス（通過）を自動計算し、実際の観測機会に基づいて次の撮影オーダーを提案します。
+
 ## 機能
 
 | 機能 | 説明 |
@@ -9,8 +11,11 @@
 | グローバルタイルグリッド | 10°×10°（可変）の緯度経度グリッドで陸域を管理 |
 | カバレッジ地図 | Leaflet.js ベースのインタラクティブ世界地図。ステータスごとに色分け表示 |
 | テーブルビュー | タイル一覧。ステータス・座標でフィルタリング可能 |
+| 衛星管理 | TLE・観測幅・センサーモード等を登録・編集 |
+| 自動パス計算 | TLE から SGP4 で軌道を伝播し、各タイルへの通過時刻を自動算出 |
+| 地上トラック表示 | 衛星の6時間予測地上軌跡を地図上に描画 |
+| 撮影機会ビュー | 未撮影タイルへの通過機会を時刻順にランキング表示 |
 | オーダー管理 | 撮影オーダーの作成・ステータス更新・削除 |
-| 次オーダー提案 | 未撮影陸地タイルを優先度順（赤道近傍優先）でリスト表示 |
 | モックモード | バックエンド不要でブラウザ単体動作（デモ・開発用） |
 
 ## アーキテクチャ
@@ -19,25 +24,30 @@
 World-Cover-Manager/
 ├── backend/
 │   ├── app/
-│   │   ├── main.py         # FastAPI アプリ（フロントも配信）
-│   │   ├── database.py     # SQLAlchemy エンジン（DB 切替対応）
-│   │   ├── models.py       # ORM モデル（Tile, Order）
-│   │   ├── schemas.py      # Pydantic スキーマ
-│   │   └── routers/
-│   │       ├── tiles.py    # GET/PATCH /api/tiles
-│   │       ├── orders.py   # CRUD /api/orders
-│   │       └── stats.py    # /api/stats/coverage, /api/stats/next-targets
-│   ├── init_db.py          # DB 初期化（タイル生成・サンプルデータ挿入）
+│   │   ├── main.py              # FastAPI アプリ（フロントも配信）
+│   │   ├── database.py          # SQLAlchemy エンジン（DB 切替対応）
+│   │   ├── models.py            # ORM モデル（Tile, Satellite, OrbitalPass, Order）
+│   │   ├── schemas.py           # Pydantic スキーマ
+│   │   ├── routers/
+│   │   │   ├── tiles.py         # GET/PATCH /api/tiles
+│   │   │   ├── satellites.py    # CRUD /api/satellites（TLE管理）
+│   │   │   ├── passes.py        # /api/passes, compute-passes, ground-track, pass-status
+│   │   │   ├── orders.py        # CRUD /api/orders
+│   │   │   └── stats.py         # /api/stats/coverage, next-targets, opportunities
+│   │   └── services/
+│   │       ├── orbit.py         # skyfield + SGP4 によるパス計算ロジック
+│   │       └── auto_pass.py     # 自動パス計算（鮮度チェック・バックグラウンドタスク）
+│   ├── init_db.py               # DB 初期化（タイル生成・サンプル衛星データ挿入）
 │   └── requirements.txt
 └── frontend/
     ├── index.html
     ├── css/style.css
     └── js/
-        ├── config.js       # MOCK_MODE スイッチ
-        ├── mock-data.js    # インメモリモックデータ
-        ├── api.js          # Real / Mock API を同一インタフェースで提供
-        ├── map-view.js     # Leaflet マップ描画
-        └── app.js          # アプリケーションコントローラ
+        ├── config.js            # MOCK_MODE スイッチ
+        ├── mock-data.js         # インメモリモックデータ
+        ├── api.js               # Real / Mock API を同一インタフェースで提供
+        ├── map-view.js          # Leaflet マップ描画・地上トラック表示
+        └── app.js               # アプリケーションコントローラ
 ```
 
 ## クイックスタート
@@ -60,12 +70,17 @@ pip install -r requirements.txt
 python init_db.py
 ```
 
+サンプル衛星（Sentinel-2A/B、Landsat 9）と陸域タイルが作成されます。
+
 オプション:
 
 ```bash
 python init_db.py --tile-size 5   # 5°×5° グリッド（より細かい分割）
 python init_db.py --reset          # テーブルを一度削除して再作成
 ```
+
+> **TLE の更新について**  
+> サンプルTLEは初期化時点のものです。本番運用では [CelesTrak](https://celestrak.org/SOCRATES/) から最新TLEを取得し、衛星管理画面で更新してください。
 
 ### 3. サーバー起動
 
@@ -76,6 +91,22 @@ uvicorn app.main:app --reload
 ブラウザで http://localhost:8000 を開くと地図UIが表示されます。
 
 API ドキュメント（Swagger UI）は http://localhost:8000/docs で確認できます。
+
+---
+
+## パス自動計算の仕組み
+
+パス計算は**手動操作不要**で自動的に行われます。
+
+| トリガー | 動作 |
+|----------|------|
+| 衛星の新規登録 | 登録直後にバックグラウンドでパスを計算 |
+| TLE の更新（PATCH） | 旧パスを削除し、バックグラウンドで再計算 |
+| 撮影機会・次候補の取得 | アクティブ衛星のパスが古い場合にリクエスト内で自動再計算 |
+
+**鮮度の定義:** 最新の `pass_end` が `現在 + 24時間` より前になると「期限切れ」とみなし、168時間分（7日間）を再計算します。
+
+衛星カードには現在のパスの有効期限と件数がリアルタイム表示されます。手動で強制再計算したい場合は「Recompute now」ボタンを使用します。
 
 ---
 
@@ -119,18 +150,50 @@ export DATABASE_URL="oracle+oracledb://user:pass@host:1521/?service_name=XE"
 
 ## API エンドポイント
 
+### タイル
+
 | Method | Path | 説明 |
 |--------|------|------|
 | GET | `/api/tiles` | タイル一覧（`?is_land=true&status=NOT_STARTED` でフィルタ可） |
 | GET | `/api/tiles/{id}` | タイル詳細 |
 | PATCH | `/api/tiles/{id}` | タイル更新（ステータス変更など） |
+
+### 衛星
+
+| Method | Path | 説明 |
+|--------|------|------|
+| GET | `/api/satellites` | 衛星一覧（`?is_active=true` でフィルタ可） |
+| POST | `/api/satellites` | 衛星登録（TLE検証・バックグラウンドパス計算を自動実行） |
+| GET | `/api/satellites/{id}` | 衛星詳細 |
+| PATCH | `/api/satellites/{id}` | 衛星更新（TLE変更時は自動再計算） |
+| DELETE | `/api/satellites/{id}` | 衛星削除（パスも連鎖削除） |
+
+### パス
+
+| Method | Path | 説明 |
+|--------|------|------|
+| GET | `/api/passes` | パス一覧（`?satellite_id=1&tile_id=2&limit=200` でフィルタ可） |
+| POST | `/api/satellites/{id}/compute-passes` | パス強制再計算（手動オーバーライド） |
+| GET | `/api/satellites/{id}/pass-status` | パス鮮度情報（有効期限・件数・再計算要否） |
+| GET | `/api/satellites/{id}/ground-track` | 地上軌跡（`?hours=6&step_s=120`） |
+
+### オーダー
+
+| Method | Path | 説明 |
+|--------|------|------|
 | GET | `/api/orders` | オーダー一覧 |
 | POST | `/api/orders` | オーダー作成 |
 | GET | `/api/orders/{id}` | オーダー詳細 |
 | PATCH | `/api/orders/{id}` | オーダー更新（ステータス進行など） |
 | DELETE | `/api/orders/{id}` | オーダー削除 |
-| GET | `/api/stats/coverage` | カバレッジ統計 |
-| GET | `/api/stats/next-targets` | 次撮影候補タイル一覧（`?limit=10`） |
+
+### 統計・提案
+
+| Method | Path | 説明 |
+|--------|------|------|
+| GET | `/api/stats/coverage` | カバレッジ統計（完了率・オーダー数など） |
+| GET | `/api/stats/next-targets` | 次撮影候補タイル一覧。パスが早い順に返す（`?limit=10`） |
+| GET | `/api/stats/opportunities` | 未撮影タイルへの通過機会を時刻順にランキング表示（`?limit=20`） |
 
 ---
 
@@ -167,6 +230,7 @@ world = gpd.read_file(gpd.datasets.get_path("naturalearth_lowres"))
 | レイヤ | 技術 |
 |--------|------|
 | バックエンド | Python 3.11+, FastAPI, SQLAlchemy 2.0, Pydantic v2 |
+| 軌道計算 | skyfield 1.49, SGP4, NumPy（ベクトル化処理で高速化） |
 | DB | SQLite（デフォルト）/ Oracle / PostgreSQL / その他 SQLAlchemy 対応 DB |
 | フロントエンド | Vanilla JavaScript (ES2020), Leaflet.js 1.9, OpenStreetMap |
 | 依存関係 | バックエンド: `requirements.txt` 参照。フロントエンド: CDN のみ |
