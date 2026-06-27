@@ -55,14 +55,32 @@ World-Cover-Manager/
 ### 前提条件
 
 - Python 3.11 以上
-- `pip`
 
-### 1. 依存ライブラリのインストール
+### 1. 仮想環境の作成とライブラリのインストール
 
 ```bash
 cd backend
+python -m venv .venv
+```
+
+仮想環境を有効化します。
+
+```bash
+# Linux / macOS
+source .venv/bin/activate
+
+# Windows（PowerShell）
+.venv\Scripts\Activate.ps1
+```
+
+有効化後、依存ライブラリをインストールします。
+
+```bash
 pip install -r requirements.txt
 ```
+
+> **閉域網環境でのインストール**  
+> インターネット接続のある端末で `pip download -r requirements.txt -d ./wheels` を実行して wheel ファイルをダウンロードしておき、閉域網側で `pip install --no-index --find-links=./wheels -r requirements.txt` としてインストールしてください。
 
 ### 2. データベースの初期化
 
@@ -80,9 +98,11 @@ python init_db.py --reset          # テーブルを一度削除して再作成
 ```
 
 > **TLE の更新について**  
-> サンプルTLEは初期化時点のものです。本番運用では [CelesTrak](https://celestrak.org/SOCRATES/) から最新TLEを取得し、衛星管理画面で更新してください。
+> サンプルTLEは初期化時点のものです。本番運用では社内システムや CelesTrak 等から最新TLEを取得し、衛星管理画面（Satellites タブ）で更新してください。
 
 ### 3. サーバー起動
+
+仮想環境が有効な状態で実行してください。
 
 ```bash
 uvicorn app.main:app --reload
@@ -91,6 +111,20 @@ uvicorn app.main:app --reload
 ブラウザで http://localhost:8000 を開くと地図UIが表示されます。
 
 API ドキュメント（Swagger UI）は http://localhost:8000/docs で確認できます。
+
+### 4. 仮想環境の移送（閉域網への持ち込み）
+
+インターネット接続のある環境で仮想環境を構築し、`backend/` ディレクトリごと閉域網端末にコピーするだけで動作します。
+
+```
+backend/
+├── .venv/          ← venv ごとコピー
+├── app/
+├── init_db.py
+└── requirements.txt
+```
+
+Python のバージョンが移送元・移送先で一致している必要があります。異なる場合は上記の wheel ファイル方式を使用してください。
 
 ---
 
