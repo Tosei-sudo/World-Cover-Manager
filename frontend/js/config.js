@@ -23,3 +23,8 @@ const CONFIG = {
 if (new URLSearchParams(window.location.search).get("mock") === "1") {
   CONFIG.MOCK_MODE = true;
 }
+
+// GitHub Pages has no backend — enable mock mode automatically
+if (window.location.hostname.endsWith(".github.io")) {
+  CONFIG.MOCK_MODE = true;
+}
