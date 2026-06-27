@@ -19,10 +19,12 @@ function initMap() {
   if (_map) return;
   _map = L.map("map", { center: [20, 10], zoom: 2 });
 
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    attribution: "© OpenStreetMap contributors",
-    maxZoom: 18,
-  }).addTo(_map);
+  if (CONFIG.TILE_SERVER_URL) {
+    L.tileLayer(CONFIG.TILE_SERVER_URL, {
+      attribution: CONFIG.TILE_ATTRIBUTION || "",
+      maxZoom: 18,
+    }).addTo(_map);
+  }
 
   _tileLayerGroup  = L.layerGroup().addTo(_map);
   _trackLayerGroup = L.layerGroup().addTo(_map);

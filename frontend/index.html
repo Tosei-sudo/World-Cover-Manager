@@ -4,8 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>World Cover Manager</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
@@ -112,7 +111,7 @@
     </div>
     <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px">
       Sorted by earliest upcoming satellite pass over uncovered land tiles.
-      Run <b>Compute passes</b> in the Satellites view to populate this list.
+      Passes are computed automatically when this view is opened.
     </p>
     <div id="opportunities-list"><p class="empty-msg">Loading…</p></div>
   </div>
@@ -124,9 +123,8 @@
       <button class="btn btn-primary" onclick="openSatelliteForm()">+ Add Satellite</button>
     </div>
     <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px">
-      Register satellites with TLE data and swath width, then click
-      <b>Compute passes</b> to populate orbital pass predictions.
-      Fresh TLEs: <a href="https://celestrak.org/SATCAT/" target="_blank" style="color:var(--primary)">CelesTrak</a>
+      Register satellites with TLE data and swath width.
+      Passes are computed automatically — use <b>Recompute now</b> to force a refresh.
     </p>
     <div id="satellites-list"></div>
   </div>
@@ -281,8 +279,7 @@
 <div id="error-toast"></div>
 
 <!-- ── Scripts ──────────────────────────────────────────────────────────── -->
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV/XN2GqQs=" crossorigin=""></script>
+<script src="vendor/leaflet/leaflet.js"></script>
 
 <script src="js/config.js"></script>
 <script src="js/mock-data.js"></script>
