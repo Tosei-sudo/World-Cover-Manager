@@ -93,9 +93,23 @@ python init_db.py
 オプション:
 
 ```bash
-python init_db.py --tile-size 5   # 5°×5° グリッド（より細かい分割）
 python init_db.py --reset          # テーブルを一度削除して再作成
+python init_db.py --tile-size 2.5  # タイルサイズを手動指定（度）
 ```
+
+**タイルサイズの自動決定**
+
+`--tile-size` を省略すると、`_SAMPLE_SATELLITES` に登録されている衛星の中で最も狭い `swath_width_km` を基準に、1パスで必ず全タイルをカバーできる最大のきりの良いサイズを自動選択します。
+
+```
+例: Landsat 9 (185 km) と Sentinel-2 (290 km) が登録されている場合
+  → 最小観測幅 185 km ÷ 111 km/° ≈ 1.67°
+  → きりの良い最大値: 1.5°
+  → 1.5°×1.5° グリッドを生成
+```
+
+衛星の追加登録後に `swath_width_km` が現在のタイルサイズより狭い場合、
+衛星カードに警告が表示されます。その際は `--reset` で再初期化してください。
 
 > **TLE の更新について**  
 > サンプルTLEは初期化時点のものです。本番運用では社内システムや CelesTrak 等から最新TLEを取得し、衛星管理画面（Satellites タブ）で更新してください。

@@ -72,7 +72,8 @@ class SatelliteOut(SatelliteBase):
     tle_epoch: Optional[datetime] = None
     tle_updated_at: datetime
     created_at: datetime
-    model_config = {"from_attributes": True}
+    tile_coverage_warning: Optional[str] = None
+    model_config = {"from_attributes": True, "populate_by_name": True}
 
 
 # ── OrbitalPass ───────────────────────────────────────────────────────────────

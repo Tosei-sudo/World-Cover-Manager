@@ -3,7 +3,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import Satellite
+from ..models import Satellite, Tile
 from ..schemas import SatelliteCreate, SatelliteOut, SatellitePatch
 from ..services.auto_pass import bg_compute_for_satellite_id
 from ..services.orbit import parse_tle_epoch, validate_tle
@@ -19,6 +19,29 @@ def _apply_tle(sat: Satellite, line1: str, line2: str) -> None:
     sat.tle_updated_at = datetime.utcnow()
 
 
+def _swath_warning(swath_km: float, db: Session) -> str | None:
+    """Return a warning string if swath_km is narrower than the current tile grid."""
+    tile_size_deg = db.query(Tile.tile_size).limit(1).scalar()
+    if tile_size_deg is None:
+        return None
+    tile_width_km = tile_size_deg * 111.0
+    if swath_km < tile_width_km:
+        return (
+            f"Swath width {swath_km} km is narrower than the tile grid "
+            f"({tile_size_deg}° ≈ {tile_width_km:.0f} km). "
+            "A single pass will not cover a full tile. "
+            "Consider re-initialising with a smaller tile size "
+            f"(e.g. python init_db.py --reset, which will auto-select ≤{swath_km/111:.1f}°)."
+        )
+    return None
+
+
+def _sat_out(sat: Satellite, db: Session) -> SatelliteOut:
+    out = SatelliteOut.model_validate(sat)
+    out.tile_coverage_warning = _swath_warning(sat.swath_width_km, db)
+    return out
+
+
 @router.get("", response_model=list[SatelliteOut])
 def list_satellites(
     is_active: bool | None = Query(None),
@@ -27,7 +50,8 @@ def list_satellites(
     q = db.query(Satellite)
     if is_active is not None:
         q = q.filter(Satellite.is_active == is_active)
-    return q.order_by(Satellite.id).all()
+    sats = q.order_by(Satellite.id).all()
+    return [_sat_out(s, db) for s in sats]
 
 
 @router.post("", response_model=SatelliteOut, status_code=201)
@@ -50,9 +74,8 @@ def create_satellite(
     db.commit()
     db.refresh(sat)
 
-    # Compute passes right after creation without blocking the response
     background_tasks.add_task(bg_compute_for_satellite_id, sat.id)
-    return sat
+    return _sat_out(sat, db)
 
 
 @router.get("/{sat_id}", response_model=SatelliteOut)
@@ -60,7 +83,7 @@ def get_satellite(sat_id: int, db: Session = Depends(get_db)):
     sat = db.get(Satellite, sat_id)
     if not sat:
         raise HTTPException(status_code=404, detail="Satellite not found")
-    return sat
+    return _sat_out(sat, db)
 
 
 @router.patch("/{sat_id}", response_model=SatelliteOut)
@@ -94,11 +117,19 @@ def patch_satellite(
     db.commit()
     db.refresh(sat)
 
-    # TLE changed → old passes are invalid, recompute immediately in background
     if tle_changed and sat.is_active:
         background_tasks.add_task(bg_compute_for_satellite_id, sat.id)
 
-    return sat
+    return _sat_out(sat, db)
+
+
+@router.delete("/{sat_id}", status_code=204)
+def delete_satellite(sat_id: int, db: Session = Depends(get_db)):
+    sat = db.get(Satellite, sat_id)
+    if not sat:
+        raise HTTPException(status_code=404, detail="Satellite not found")
+    db.delete(sat)
+    db.commit()
 
 
 @router.delete("/{sat_id}", status_code=204)
