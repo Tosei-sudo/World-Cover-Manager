@@ -116,9 +116,16 @@ const MockAPI = {
     },
     create: async (body) => {
       await _delay();
+      const tileSize = (MOCK_TILES[0]?.tile_size ?? 10);
+      const tileWidthKm = tileSize * 111;
+      const warning = body.swath_width_km < tileWidthKm
+        ? `Swath width ${body.swath_width_km} km is narrower than the tile grid (${tileSize}° ≈ ${tileWidthKm.toFixed(0)} km). A single pass will not cover a full tile.`
+        : null;
       const sat = { id: _satIdSeq++, tle_epoch: null,
         tle_updated_at: new Date().toISOString(),
-        created_at: new Date().toISOString(), ...body };
+        created_at: new Date().toISOString(),
+        tile_coverage_warning: warning,
+        ...body };
       MOCK_SATELLITES.push(sat);
       return _deepClone(sat);
     },

@@ -1,12 +1,15 @@
 """
 Database initialisation script.
 
-Generates a global lat/lon tile grid (default 10°×10°), classifies each tile
-as land or ocean using a heuristic based on continental bounding boxes, and
-seeds a few sample orders for demonstration purposes.
+Generates a global lat/lon tile grid, classifies each tile as land or ocean
+using a heuristic based on continental bounding boxes, and seeds sample data.
+
+Tile size is derived automatically from the narrowest swath width among the
+registered satellites (so a single pass can always cover a full tile).
+Override with --tile-size if needed.
 
 Usage:
-    python init_db.py [--tile-size 10] [--reset]
+    python init_db.py [--tile-size 2.5] [--reset]
 """
 
 import argparse
@@ -20,6 +23,37 @@ sys.path.insert(0, str(Path(__file__).parent))
 from app.database import Base, SessionLocal, engine
 from app.models import Order, Satellite, Tile
 from app.services.orbit import parse_tle_epoch
+
+
+# ---------------------------------------------------------------------------
+# Tile size helper
+# ---------------------------------------------------------------------------
+
+# Sizes (degrees) that divide both 180 and 360 cleanly, in ascending order.
+_CLEAN_TILE_SIZES = [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 9.0, 10.0, 12.0, 15.0]
+
+
+def swath_to_tile_size(swath_km: float) -> float:
+    """Return the largest clean tile size (degrees) that fits within one swath pass.
+
+    A satellite with swath_width_km can photograph at most swath_km / 111 degrees
+    of longitude in a single pass.  We pick the largest clean grid size that is
+    strictly no wider than the swath so every tile is guaranteed to be fully
+    covered by a single pass.
+    """
+    max_deg = swath_km / 111.0
+    candidates = [s for s in _CLEAN_TILE_SIZES if s <= max_deg]
+    return candidates[-1] if candidates else _CLEAN_TILE_SIZES[0]
+
+
+def tile_size_from_satellites(satellites: list[dict]) -> float:
+    """Derive tile size from the narrowest swath among *satellites*.
+
+    Uses the minimum swath so that even the most constrained satellite
+    can cover a tile in a single pass.
+    """
+    min_swath = min(s["swath_width_km"] for s in satellites)
+    return swath_to_tile_size(min_swath)
 
 
 # ---------------------------------------------------------------------------
@@ -280,9 +314,27 @@ def _sample_orders(db, land_tiles: list[Tile]) -> None:
 
 def main():
     parser = argparse.ArgumentParser(description="Initialise the World Cover Manager database")
-    parser.add_argument("--tile-size", type=float, default=10.0, help="Tile size in degrees (default: 10)")
+    parser.add_argument(
+        "--tile-size", type=float, default=None,
+        help=(
+            "Tile size in degrees. "
+            "Defaults to the largest clean size that fits within the narrowest "
+            "satellite swath (so every tile can be covered in a single pass)."
+        ),
+    )
     parser.add_argument("--reset", action="store_true", help="Drop and recreate all tables first")
     args = parser.parse_args()
+
+    # Determine tile size
+    if args.tile_size is not None:
+        tile_size = args.tile_size
+        print(f"Tile size   : {tile_size}° (specified via --tile-size)")
+    else:
+        tile_size = tile_size_from_satellites(_SAMPLE_SATELLITES)
+        min_swath  = min(s["swath_width_km"] for s in _SAMPLE_SATELLITES)
+        min_sat    = min(_SAMPLE_SATELLITES, key=lambda s: s["swath_width_km"])
+        print(f"Tile size   : {tile_size}° (auto from narrowest swath: "
+              f"{min_sat['name']} {min_swath} km → ≤{min_swath/111:.2f}°)")
 
     if args.reset:
         print("Dropping all tables …")
@@ -297,8 +349,8 @@ def main():
             print("Database already contains tiles. Use --reset to reinitialise.")
             return
 
-        print(f"Generating {args.tile_size}°×{args.tile_size}° tile grid …")
-        tile_dicts = generate_tiles(args.tile_size)
+        print(f"Generating {tile_size}°×{tile_size}° tile grid …")
+        tile_dicts = generate_tiles(tile_size)
         land_count = sum(1 for t in tile_dicts if t["is_land"])
         print(f"  Total tiles : {len(tile_dicts)}")
         print(f"  Land tiles  : {land_count}")
@@ -319,13 +371,8 @@ def main():
         db.commit()
         print("Done.")
         print()
-        print("Next step: compute orbital passes for each satellite.")
-        print("  python -c \"")
-        print("  import requests")
-        print("  for sat_id in [1,2,3]:")
-        print("      r = requests.post(f'http://localhost:8000/api/satellites/{sat_id}/compute-passes')")
-        print("      print(r.json())")
-        print("  \"")
+        print("Orbital passes will be computed automatically when the server receives")
+        print("its first request to /api/stats/opportunities or /api/stats/next-targets.")
     finally:
         db.close()
 

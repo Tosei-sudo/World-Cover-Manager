@@ -235,6 +235,7 @@ function renderSatellitesView(sats) {
         <span>Modes: <b>${s.sensor_modes || "—"}</b></span>
         <span>TLE epoch: <b>${s.tle_epoch ? new Date(s.tle_epoch).toLocaleDateString() : "—"}</b></span>
       </div>
+      ${s.tile_coverage_warning ? `<div class="sat-swath-warning">⚠ ${s.tile_coverage_warning}</div>` : ""}
       <div id="sat-pass-status-${s.id}" class="sat-pass-status">
         <span class="pass-status-loading">Checking pass coverage…</span>
       </div>

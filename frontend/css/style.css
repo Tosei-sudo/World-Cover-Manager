@@ -424,6 +424,18 @@ header nav button.active {
 .sat-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .sat-compute-result { margin-top: 6px; font-size: 12px; }
 
+/* Swath vs tile-size mismatch warning */
+.sat-swath-warning {
+  font-size: 12px;
+  color: var(--warning);
+  background: #fffbeb;
+  border: 1px solid #fcd34d;
+  border-radius: 4px;
+  padding: 6px 8px;
+  margin-bottom: 8px;
+  line-height: 1.5;
+}
+
 /* Pass freshness indicator */
 .sat-pass-status { font-size: 12px; margin-bottom: 8px; padding: 4px 8px; border-radius: 4px; }
 .sat-pass-status .pass-status-loading { color: var(--text-muted); }
