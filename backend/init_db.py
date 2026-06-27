@@ -18,7 +18,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from app.database import Base, SessionLocal, engine
-from app.models import Order, Tile
+from app.models import Order, Satellite, Tile
+from app.services.orbit import parse_tle_epoch
 
 
 # ---------------------------------------------------------------------------
@@ -150,6 +151,60 @@ def generate_tiles(tile_size: float = 10.0) -> list[dict]:
 
 
 # ---------------------------------------------------------------------------
+# Sample satellites (demo data)
+# ---------------------------------------------------------------------------
+
+# These TLEs are representative examples for demonstration.
+# Refresh from https://celestrak.org/SATCAT/ or https://www.space-track.org
+_SAMPLE_SATELLITES = [
+    dict(
+        name="Sentinel-2A",
+        norad_id=40697,
+        tle_line1="1 40697U 15028A   25170.50000000  .00000123  00000-0  63064-4 0  9999",
+        tle_line2="2 40697  98.5662 126.3044 0001055  89.1278 271.0024 14.30819878462521",
+        swath_width_km=290.0,
+        sensor_modes="MULTISPECTRAL",
+        min_resolution_m=10.0,
+        notes="ESA Sentinel-2A – 290 km swath, 10 m multispectral (example TLE).",
+    ),
+    dict(
+        name="Sentinel-2B",
+        norad_id=42063,
+        tle_line1="1 42063U 17013A   25170.50000000  .00000114  00000-0  55918-4 0  9999",
+        tle_line2="2 42063  98.5700 113.8445 0001024  83.5741 276.5596 14.30819878362159",
+        swath_width_km=290.0,
+        sensor_modes="MULTISPECTRAL",
+        min_resolution_m=10.0,
+        notes="ESA Sentinel-2B – 290 km swath, 10 m multispectral (example TLE).",
+    ),
+    dict(
+        name="Landsat 9",
+        norad_id=49260,
+        tle_line1="1 49260U 21088A   25170.50000000  .00000023  00000-0  46059-5 0  9999",
+        tle_line2="2 49260  98.2143  78.1459 0001356  92.1812 267.9534 14.57192027119043",
+        swath_width_km=185.0,
+        sensor_modes="MULTISPECTRAL,PANCHROMATIC,THERMAL",
+        min_resolution_m=15.0,
+        notes="USGS Landsat 9 – 185 km swath, 15 m pan / 30 m multispectral (example TLE).",
+    ),
+]
+
+
+def _sample_satellites(db) -> list[Satellite]:
+    sats = []
+    for data in _SAMPLE_SATELLITES:
+        sat = Satellite(
+            **data,
+            tle_epoch=parse_tle_epoch(data["tle_line1"]),
+            tle_updated_at=datetime.utcnow(),
+            is_active=True,
+        )
+        db.add(sat)
+        sats.append(sat)
+    return sats
+
+
+# ---------------------------------------------------------------------------
 # Sample orders (demo data)
 # ---------------------------------------------------------------------------
 
@@ -254,11 +309,23 @@ def main():
         db.flush()
 
         land_tiles = [t for t in tile_objects if t.is_land]
+        print("Inserting sample satellites …")
+        _sample_satellites(db)
+        db.flush()
+
         print("Inserting sample orders …")
         _sample_orders(db, land_tiles)
 
         db.commit()
         print("Done.")
+        print()
+        print("Next step: compute orbital passes for each satellite.")
+        print("  python -c \"")
+        print("  import requests")
+        print("  for sat_id in [1,2,3]:")
+        print("      r = requests.post(f'http://localhost:8000/api/satellites/{sat_id}/compute-passes')")
+        print("      print(r.json())")
+        print("  \"")
     finally:
         db.close()
 

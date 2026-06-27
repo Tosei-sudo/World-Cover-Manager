@@ -1,9 +1,59 @@
 from datetime import datetime
 from sqlalchemy import (
-    Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text
+    Boolean, Column, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 )
 from sqlalchemy.orm import relationship
 from .database import Base
+
+
+class Satellite(Base):
+    """A satellite that can be tasked for imaging."""
+    __tablename__ = "satellites"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(200), nullable=False)
+    norad_id = Column(Integer, nullable=True, unique=True, index=True)
+
+    # TLE (Two-Line Element set)
+    tle_line1 = Column(String(100), nullable=False)
+    tle_line2 = Column(String(100), nullable=False)
+    tle_epoch = Column(DateTime, nullable=True)         # Parsed from TLE
+    tle_updated_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    # Sensor characteristics
+    swath_width_km = Column(Float, nullable=False)      # Total cross-track swath (km)
+    sensor_modes = Column(String(500), nullable=True)   # Comma-separated: "MULTISPECTRAL,PANCHROMATIC"
+    min_resolution_m = Column(Float, nullable=True)     # Best achievable GSD (m)
+
+    is_active = Column(Boolean, nullable=False, default=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    orders = relationship("Order", back_populates="satellite")
+    passes = relationship("OrbitalPass", back_populates="satellite", cascade="all, delete-orphan")
+
+
+class OrbitalPass(Base):
+    """A predicted pass of a satellite over a tile, computed from TLE + swath."""
+    __tablename__ = "orbital_passes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    satellite_id = Column(Integer, ForeignKey("satellites.id", ondelete="CASCADE"), nullable=False)
+    tile_id = Column(Integer, ForeignKey("tiles.id", ondelete="CASCADE"), nullable=False)
+
+    pass_start = Column(DateTime, nullable=False)
+    pass_end = Column(DateTime, nullable=False)
+    duration_s = Column(Integer, nullable=False)        # pass_end - pass_start in seconds
+    computed_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    satellite = relationship("Satellite", back_populates="passes")
+    tile = relationship("Tile", back_populates="passes")
+
+    __table_args__ = (
+        UniqueConstraint("satellite_id", "tile_id", "pass_start", name="uq_pass"),
+        Index("ix_pass_start", "pass_start"),
+        Index("ix_pass_sat_tile", "satellite_id", "tile_id"),
+    )
 
 
 class Tile(Base):
@@ -11,15 +61,12 @@ class Tile(Base):
     __tablename__ = "tiles"
 
     id = Column(Integer, primary_key=True, index=True)
-    # Grid cell boundaries (degrees)
     lat_min = Column(Float, nullable=False)
     lat_max = Column(Float, nullable=False)
     lon_min = Column(Float, nullable=False)
     lon_max = Column(Float, nullable=False)
-    # Derived centre point (stored for quick access)
     center_lat = Column(Float, nullable=False)
     center_lon = Column(Float, nullable=False)
-    # Size in degrees (e.g. 10.0 for a 10°×10° tile)
     tile_size = Column(Float, nullable=False, default=10.0)
 
     is_land = Column(Boolean, nullable=False, default=True)
@@ -30,32 +77,31 @@ class Tile(Base):
     notes = Column(Text, nullable=True)
 
     orders = relationship("Order", back_populates="tile")
+    passes = relationship("OrbitalPass", back_populates="tile", cascade="all, delete-orphan")
 
 
 class Order(Base):
-    """A shooting order sent to (or planned for) the satellite."""
+    """A shooting order sent to (or planned for) a satellite."""
     __tablename__ = "orders"
 
     id = Column(Integer, primary_key=True, index=True)
     tile_id = Column(Integer, ForeignKey("tiles.id"), nullable=True)
+    satellite_id = Column(Integer, ForeignKey("satellites.id"), nullable=True)
 
-    # Target centre
     center_lat = Column(Float, nullable=False)
     center_lon = Column(Float, nullable=False)
     target_name = Column(String(200), nullable=True)
 
-    # Schedule window
     scheduled_start = Column(DateTime, nullable=True)
     scheduled_end = Column(DateTime, nullable=True)
 
-    # Shooting parameters
-    resolution_m = Column(Float, nullable=True)       # Ground resolution (m)
-    sensor_mode = Column(String(50), nullable=True)   # MULTISPECTRAL | PANCHROMATIC | SAR …
+    resolution_m = Column(Float, nullable=True)
+    sensor_mode = Column(String(50), nullable=True)
     max_cloud_pct = Column(Float, nullable=False, default=20.0)
-    sun_elev_min = Column(Float, nullable=True)       # Min sun elevation angle (°)
-    off_nadir_max = Column(Float, nullable=True)      # Max off-nadir angle (°)
+    sun_elev_min = Column(Float, nullable=True)
+    off_nadir_max = Column(Float, nullable=True)
 
-    priority = Column(Integer, nullable=False, default=5)  # 1 (low) – 10 (high)
+    priority = Column(Integer, nullable=False, default=5)
 
     # PLANNED | SCHEDULED | IN_PROGRESS | COMPLETED | FAILED | CANCELLED
     status = Column(String(20), nullable=False, default="PLANNED")
@@ -66,3 +112,4 @@ class Order(Base):
     notes = Column(Text, nullable=True)
 
     tile = relationship("Tile", back_populates="orders")
+    satellite = relationship("Satellite", back_populates="orders")

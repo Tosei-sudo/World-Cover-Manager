@@ -34,8 +34,75 @@ class TilePatch(BaseModel):
 
 class TileOut(TileBase):
     id: int
-
     model_config = {"from_attributes": True}
+
+
+# ── Satellite ─────────────────────────────────────────────────────────────────
+
+class SatelliteBase(BaseModel):
+    name: str
+    norad_id: Optional[int] = None
+    tle_line1: str = Field(..., min_length=69, max_length=100)
+    tle_line2: str = Field(..., min_length=69, max_length=100)
+    swath_width_km: float = Field(..., gt=0)
+    sensor_modes: Optional[str] = None   # comma-separated, e.g. "MULTISPECTRAL,PANCHROMATIC"
+    min_resolution_m: Optional[float] = Field(None, gt=0)
+    is_active: bool = True
+    notes: Optional[str] = None
+
+
+class SatelliteCreate(SatelliteBase):
+    pass
+
+
+class SatellitePatch(BaseModel):
+    name: Optional[str] = None
+    norad_id: Optional[int] = None
+    tle_line1: Optional[str] = None
+    tle_line2: Optional[str] = None
+    swath_width_km: Optional[float] = None
+    sensor_modes: Optional[str] = None
+    min_resolution_m: Optional[float] = None
+    is_active: Optional[bool] = None
+    notes: Optional[str] = None
+
+
+class SatelliteOut(SatelliteBase):
+    id: int
+    tle_epoch: Optional[datetime] = None
+    tle_updated_at: datetime
+    created_at: datetime
+    model_config = {"from_attributes": True}
+
+
+# ── OrbitalPass ───────────────────────────────────────────────────────────────
+
+class OrbitalPassOut(BaseModel):
+    id: int
+    satellite_id: int
+    tile_id: int
+    pass_start: datetime
+    pass_end: datetime
+    duration_s: int
+    computed_at: datetime
+    model_config = {"from_attributes": True}
+
+
+class PassOpportunity(BaseModel):
+    """One upcoming imaging opportunity: a specific (satellite, tile, pass) combo."""
+    tile: TileOut
+    satellite: SatelliteOut
+    pass_start: datetime
+    pass_end: datetime
+    duration_s: int
+
+
+class ComputePassesResult(BaseModel):
+    satellite_id: int
+    window_hours: int
+    tiles_checked: int
+    passes_found: int
+    elapsed_s: float
 
 
 # ── Order ─────────────────────────────────────────────────────────────────────
@@ -45,6 +112,7 @@ class OrderBase(BaseModel):
     center_lon: float = Field(..., ge=-180, le=180)
     target_name: Optional[str] = None
     tile_id: Optional[int] = None
+    satellite_id: Optional[int] = None
     scheduled_start: Optional[datetime] = None
     scheduled_end: Optional[datetime] = None
     resolution_m: Optional[float] = Field(None, gt=0)
@@ -63,6 +131,7 @@ class OrderCreate(OrderBase):
 class OrderPatch(BaseModel):
     target_name: Optional[str] = None
     tile_id: Optional[int] = None
+    satellite_id: Optional[int] = None
     scheduled_start: Optional[datetime] = None
     scheduled_end: Optional[datetime] = None
     resolution_m: Optional[float] = None
@@ -82,7 +151,6 @@ class OrderOut(OrderBase):
     created_at: datetime
     updated_at: datetime
     completed_at: Optional[datetime] = None
-
     model_config = {"from_attributes": True}
 
 

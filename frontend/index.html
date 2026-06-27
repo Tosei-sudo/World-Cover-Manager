@@ -4,11 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>World Cover Manager</title>
-
-  <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
         integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
@@ -19,14 +16,15 @@
   <span id="mode-badge">LIVE</span>
   <div class="spacer"></div>
   <nav>
-    <button id="btn-map"    class="active" onclick="switchView('map')">Map</button>
-    <button id="btn-table"             onclick="switchView('table')">Table</button>
-    <button id="btn-orders"            onclick="switchView('orders')">Orders</button>
+    <button id="btn-map"           class="active" onclick="switchView('map')">Map</button>
+    <button id="btn-table"                        onclick="switchView('table')">Table</button>
+    <button id="btn-orders"                       onclick="switchView('orders')">Orders</button>
+    <button id="btn-opportunities"                onclick="switchView('opportunities')">Opportunities</button>
+    <button id="btn-satellites"                   onclick="switchView('satellites')">Satellites</button>
   </nav>
   <div class="header-actions">
-    <button class="btn btn-outline" style="color:#fff;border-color:rgba(255,255,255,.3)"
-            onclick="showNextTargets()">Next Targets</button>
-    <button class="btn btn-primary" onclick="openOrderForm()">+ New Order</button>
+    <button class="btn btn-outline header-btn" onclick="showNextTargets()">Next Targets</button>
+    <button class="btn btn-primary"            onclick="openOrderForm()">+ New Order</button>
   </div>
 </header>
 
@@ -51,12 +49,11 @@
     <span class="stat-label">Coverage</span>
     <span class="stat-value" id="stat-pct">—</span>
   </div>
-  <button class="btn btn-secondary btn-sm" onclick="Promise.all([refreshTiles(),refreshOrders(),refreshStats()])">
-    ↻ Refresh
-  </button>
+  <button class="btn btn-secondary btn-sm"
+          onclick="Promise.all([refreshTiles(),refreshOrders(),refreshSatellites(),refreshStats()])">↻</button>
 </div>
 
-<!-- ── Main content ─────────────────────────────────────────────────────── -->
+<!-- ── Main ────────────────────────────────────────────────────────────── -->
 <div id="main">
 
   <!-- Map view -->
@@ -69,6 +66,7 @@
       <div class="legend-item"><span class="legend-swatch" style="background:#2ecc71"></span>Completed</div>
     </div>
     <div id="map-toolbar">
+      <button class="btn btn-secondary btn-sm" onclick="clearGroundTracks()">Clear tracks</button>
       <button class="btn btn-secondary btn-sm" onclick="showNextTargets()">Next Targets</button>
     </div>
   </div>
@@ -76,8 +74,8 @@
   <!-- Table view -->
   <div id="view-table" class="view">
     <div class="table-toolbar">
-      <input id="table-filter" type="text" placeholder="Search by ID or coordinate…"
-             oninput="filterTable()" style="flex:1;min-width:160px" />
+      <input id="table-filter" type="text" placeholder="Search ID or coordinate…"
+             oninput="filterTable()" style="flex:1;min-width:140px"/>
       <select id="table-status-filter" onchange="filterTable()">
         <option value="">All statuses</option>
         <option value="NOT_STARTED">Not started</option>
@@ -89,11 +87,8 @@
     <table id="tile-table">
       <thead>
         <tr>
-          <th>ID</th>
-          <th>Centre (lat, lon)</th>
-          <th>Status</th>
-          <th>Times covered</th>
-          <th>Last captured</th>
+          <th>ID</th><th>Centre (lat, lon)</th><th>Status</th>
+          <th>Times covered</th><th>Last captured</th>
         </tr>
       </thead>
       <tbody></tbody>
@@ -102,11 +97,38 @@
 
   <!-- Orders view -->
   <div id="view-orders" class="view">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;padding:0 2px">
-      <h2 style="font-size:16px;font-weight:700">Orders</h2>
+    <div class="view-header">
+      <h2>Orders</h2>
       <button class="btn btn-primary" onclick="openOrderForm()">+ New Order</button>
     </div>
     <div id="orders-list"></div>
+  </div>
+
+  <!-- Opportunities view -->
+  <div id="view-opportunities" class="view">
+    <div class="view-header">
+      <h2>Upcoming Imaging Opportunities</h2>
+      <button class="btn btn-secondary" onclick="loadOpportunities()">↻ Refresh</button>
+    </div>
+    <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px">
+      Sorted by earliest upcoming satellite pass over uncovered land tiles.
+      Run <b>Compute passes</b> in the Satellites view to populate this list.
+    </p>
+    <div id="opportunities-list"><p class="empty-msg">Loading…</p></div>
+  </div>
+
+  <!-- Satellites view -->
+  <div id="view-satellites" class="view">
+    <div class="view-header">
+      <h2>Satellites</h2>
+      <button class="btn btn-primary" onclick="openSatelliteForm()">+ Add Satellite</button>
+    </div>
+    <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px">
+      Register satellites with TLE data and swath width, then click
+      <b>Compute passes</b> to populate orbital pass predictions.
+      Fresh TLEs: <a href="https://celestrak.org/SATCAT/" target="_blank" style="color:var(--primary)">CelesTrak</a>
+    </p>
+    <div id="satellites-list"></div>
   </div>
 
 </div><!-- /#main -->
@@ -119,7 +141,7 @@
 <!-- ── Next targets panel ───────────────────────────────────────────────── -->
 <div id="next-targets-panel" class="panel">
   <button class="panel-close" onclick="closeNextTargets()" aria-label="Close">×</button>
-  <p style="color:var(--text-muted);font-size:13px">Loading suggestions…</p>
+  <p style="color:var(--text-muted);font-size:13px">Loading…</p>
 </div>
 
 <!-- ── Order form panel ─────────────────────────────────────────────────── -->
@@ -131,8 +153,15 @@
     <div class="form-grid">
 
       <div class="form-group full">
+        <label>Satellite</label>
+        <select id="of-satellite">
+          <option value="">— none —</option>
+        </select>
+      </div>
+
+      <div class="form-group full">
         <label>Target name</label>
-        <input type="text" id="of-name" placeholder="e.g. Sahara desert pass" />
+        <input type="text" id="of-name" placeholder="e.g. Amazon basin pass" />
       </div>
 
       <div class="form-group">
@@ -166,7 +195,7 @@
       </div>
       <div class="form-group">
         <label>Resolution (m)</label>
-        <input type="number" id="of-res" step="0.1" min="0.1" placeholder="e.g. 5.0" />
+        <input type="number" id="of-res" step="0.1" min="0.1" placeholder="e.g. 10" />
       </div>
 
       <div class="form-group">
@@ -179,7 +208,7 @@
       </div>
 
       <div class="form-group">
-        <label>Max off-nadir angle (°)</label>
+        <label>Max off-nadir (°)</label>
         <input type="number" id="of-nadir" min="0" max="60" placeholder="e.g. 25" />
       </div>
       <div class="form-group">
@@ -191,7 +220,6 @@
         <label>Notes</label>
         <textarea id="of-notes" placeholder="Optional notes…"></textarea>
       </div>
-
     </div>
     <div class="form-actions">
       <button type="button" class="btn btn-secondary" onclick="closeOrderForm()">Cancel</button>
@@ -200,11 +228,59 @@
   </form>
 </div>
 
-<!-- ── Error toast ───────────────────────────────────────────────────────── -->
+<!-- ── Satellite form panel ──────────────────────────────────────────────── -->
+<div id="satellite-form-panel" class="panel">
+  <button class="panel-close" onclick="closeSatelliteForm()" aria-label="Close">×</button>
+  <h3 id="sf-title">Add Satellite</h3>
+  <form onsubmit="submitSatelliteForm(event)">
+    <input type="hidden" id="sf-id" />
+    <div class="form-grid">
+
+      <div class="form-group full">
+        <label>TLE block (paste 2 or 3 lines from CelesTrak) *</label>
+        <textarea id="sf-tle" rows="4" placeholder="ISS (ZARYA)&#10;1 25544U 98067A …&#10;2 25544  51.6416 …" required
+                  style="font-family:monospace;font-size:12px"></textarea>
+      </div>
+
+      <div class="form-group">
+        <label>Display name (override TLE line 0)</label>
+        <input type="text" id="sf-name" placeholder="e.g. Sentinel-2A" />
+      </div>
+      <div class="form-group">
+        <label>NORAD ID</label>
+        <input type="number" id="sf-norad" placeholder="e.g. 40697" />
+      </div>
+
+      <div class="form-group">
+        <label>Swath width (km) *</label>
+        <input type="number" id="sf-swath" step="0.1" min="1" placeholder="e.g. 290" required />
+      </div>
+      <div class="form-group">
+        <label>Best resolution (m)</label>
+        <input type="number" id="sf-resolution" step="0.1" min="0.1" placeholder="e.g. 10" />
+      </div>
+
+      <div class="form-group full">
+        <label>Sensor modes (comma-separated)</label>
+        <input type="text" id="sf-modes" placeholder="MULTISPECTRAL,PANCHROMATIC" />
+      </div>
+
+      <div class="form-group full">
+        <label>Notes</label>
+        <textarea id="sf-notes" placeholder="Optional notes…"></textarea>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button type="button" class="btn btn-secondary" onclick="closeSatelliteForm()">Cancel</button>
+      <button type="submit" class="btn btn-primary">Save</button>
+    </div>
+  </form>
+</div>
+
+<!-- ── Error/info toast ──────────────────────────────────────────────────── -->
 <div id="error-toast"></div>
 
 <!-- ── Scripts ──────────────────────────────────────────────────────────── -->
-<!-- Leaflet JS -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV/XN2GqQs=" crossorigin=""></script>
 

@@ -16,6 +16,7 @@ TERMINAL_STATUSES = {"COMPLETED", "FAILED", "CANCELLED"}
 def list_orders(
     status: Optional[str] = Query(None),
     tile_id: Optional[int] = Query(None),
+    satellite_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
 ):
     q = db.query(Order)
@@ -23,6 +24,8 @@ def list_orders(
         q = q.filter(Order.status == status)
     if tile_id is not None:
         q = q.filter(Order.tile_id == tile_id)
+    if satellite_id is not None:
+        q = q.filter(Order.satellite_id == satellite_id)
     return q.order_by(Order.created_at.desc()).all()
 
 

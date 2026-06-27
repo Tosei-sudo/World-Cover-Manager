@@ -4,7 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
 from .database import Base, engine
-from .routers import orders, stats, tiles
+from .routers import orders, passes, satellites, stats, tiles
 
 Base.metadata.create_all(bind=engine)
 
@@ -24,6 +24,8 @@ app.add_middleware(
 
 app.include_router(tiles.router, prefix="/api")
 app.include_router(orders.router, prefix="/api")
+app.include_router(satellites.router, prefix="/api")
+app.include_router(passes.router, prefix="/api")
 app.include_router(stats.router, prefix="/api")
 
 # Serve frontend from the sibling "frontend" directory
