@@ -424,6 +424,12 @@ header nav button.active {
 .sat-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .sat-compute-result { margin-top: 6px; font-size: 12px; }
 
+/* Pass freshness indicator */
+.sat-pass-status { font-size: 12px; margin-bottom: 8px; padding: 4px 8px; border-radius: 4px; }
+.sat-pass-status .pass-status-loading { color: var(--text-muted); }
+.sat-pass-status .pass-status-ok { color: var(--success); }
+.sat-pass-status .pass-status-stale { color: var(--warning); }
+
 /* ── Opportunities view ──────────────────────────────────────────────────── */
 #view-opportunities { padding: 16px; overflow-y: auto; }
 #opportunities-list { display: flex; flex-direction: column; gap: 8px; }

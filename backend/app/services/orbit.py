@@ -18,7 +18,14 @@ import numpy as np
 from skyfield.api import EarthSatellite, load, wgs84
 
 if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
     from ..models import Tile
+
+# Passes are considered stale when fewer than this many hours of future
+# coverage remain.  The compute window (default 168 h) minus this threshold
+# is how long computed passes stay "fresh" before auto-recompute triggers.
+RECOMPUTE_THRESHOLD_HOURS = 24
+COMPUTE_WINDOW_HOURS = 168   # default look-ahead when computing
 
 # Singleton timescale – initialised once per process.
 # builtin=True avoids downloading IERS data; sufficient for LEO propagation.
@@ -53,6 +60,39 @@ def validate_tle(line1: str, line2: str) -> None:
         raise ValueError(f"TLE line 1 too short ({len(line1.strip())} chars, expected ≥69)")
     if len(line2.strip()) < 69:
         raise ValueError(f"TLE line 2 too short ({len(line2.strip())} chars, expected ≥69)")
+
+
+# ── Staleness check ───────────────────────────────────────────────────────────
+
+def needs_recompute(satellite_id: int, db: "Session") -> bool:
+    """
+    Return True when this satellite's pass table needs (re)computation.
+
+    Triggers:
+    - No future passes exist at all.
+    - The latest pass_end is within RECOMPUTE_THRESHOLD_HOURS from now, meaning
+      the current window is about to expire.
+    """
+    from sqlalchemy import func
+    from ..models import OrbitalPass
+
+    now = datetime.now(tz=timezone.utc)
+    threshold = now + timedelta(hours=RECOMPUTE_THRESHOLD_HOURS)
+
+    latest_end = (
+        db.query(func.max(OrbitalPass.pass_end))
+        .filter(OrbitalPass.satellite_id == satellite_id)
+        .scalar()
+    )
+
+    if latest_end is None:
+        return True  # No passes at all
+
+    # Normalise – SQLite stores without tz, others may differ
+    if latest_end.tzinfo is None:
+        latest_end = latest_end.replace(tzinfo=timezone.utc)
+
+    return latest_end < threshold
 
 
 # ── Pass computation ───────────────────────────────────────────────────────────

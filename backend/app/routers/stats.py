@@ -1,11 +1,12 @@
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import Order, OrbitalPass, Satellite, Tile
 from ..schemas import CoverageStats, PassOpportunity, TileOut
+from ..services.auto_pass import ensure_passes_fresh
 
 router = APIRouter(prefix="/stats", tags=["stats"])
 
@@ -41,10 +42,12 @@ def next_targets(
     """
     Return uncovered land tiles sorted by earliest upcoming pass.
     Falls back to latitude heuristic when no pass data is available.
+    Automatically recomputes passes for stale satellites before querying.
     """
+    ensure_passes_fresh(db)
+
     now = datetime.now(tz=timezone.utc)
 
-    # Tiles with a computed future pass – ordered by soonest pass start
     tiles_with_pass = (
         db.query(Tile, func.min(OrbitalPass.pass_start).label("next_pass"))
         .join(OrbitalPass, OrbitalPass.tile_id == Tile.id)
@@ -62,7 +65,6 @@ def next_targets(
     tile_ids_with_pass = {t.id for t, _ in tiles_with_pass}
     result_tiles = [t for t, _ in tiles_with_pass]
 
-    # Fill remaining slots with the latitude heuristic
     remaining = limit - len(result_tiles)
     if remaining > 0:
         fallback = (
@@ -87,11 +89,11 @@ def next_opportunities(
     db: Session = Depends(get_db),
 ):
     """
-    Return the N soonest imaging opportunities for uncovered land tiles,
-    including which satellite will cover them and when.
-
-    Results are sorted by pass_start ascending (i.e., most imminent first).
+    Return the N soonest imaging opportunities for uncovered land tiles.
+    Automatically recomputes passes for stale satellites before querying.
     """
+    ensure_passes_fresh(db)
+
     now = datetime.now(tz=timezone.utc)
 
     rows = (

@@ -20,8 +20,9 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import OrbitalPass, Satellite, Tile
-from ..schemas import ComputePassesResult, OrbitalPassOut
-from ..services.orbit import compute_passes, ground_track
+from ..schemas import ComputePassesResult, OrbitalPassOut, PassStatus
+from sqlalchemy import func
+from ..services.orbit import compute_passes, ground_track, needs_recompute
 
 router = APIRouter(tags=["passes"])
 
@@ -124,6 +125,32 @@ def list_passes(
     if before:
         q = q.filter(OrbitalPass.pass_start <= before)
     return q.order_by(OrbitalPass.pass_start).limit(limit).all()
+
+
+# ── Pass status ───────────────────────────────────────────────────────────────
+
+@router.get("/satellites/{sat_id}/pass-status", response_model=PassStatus)
+def get_pass_status(sat_id: int, db: Session = Depends(get_db)):
+    """Return freshness metadata for a satellite's precomputed passes."""
+    sat = db.get(Satellite, sat_id)
+    if not sat:
+        raise HTTPException(status_code=404, detail="Satellite not found")
+
+    now = datetime.now(tz=timezone.utc)
+    latest_end, count = (
+        db.query(func.max(OrbitalPass.pass_end), func.count())
+        .filter(OrbitalPass.satellite_id == sat_id, OrbitalPass.pass_end >= now)
+        .one()
+    )
+    if latest_end is not None and latest_end.tzinfo is None:
+        latest_end = latest_end.replace(tzinfo=timezone.utc)
+
+    return PassStatus(
+        satellite_id=sat_id,
+        passes_valid_until=latest_end,
+        needs_recompute=needs_recompute(sat_id, db),
+        pass_count=count or 0,
+    )
 
 
 # ── Ground track ──────────────────────────────────────────────────────────────

@@ -105,6 +105,13 @@ class ComputePassesResult(BaseModel):
     elapsed_s: float
 
 
+class PassStatus(BaseModel):
+    satellite_id: int
+    passes_valid_until: Optional[datetime] = None
+    needs_recompute: bool
+    pass_count: int
+
+
 # ── Order ─────────────────────────────────────────────────────────────────────
 
 class OrderBase(BaseModel):

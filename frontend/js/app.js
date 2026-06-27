@@ -235,13 +235,16 @@ function renderSatellitesView(sats) {
         <span>Modes: <b>${s.sensor_modes || "—"}</b></span>
         <span>TLE epoch: <b>${s.tle_epoch ? new Date(s.tle_epoch).toLocaleDateString() : "—"}</b></span>
       </div>
+      <div id="sat-pass-status-${s.id}" class="sat-pass-status">
+        <span class="pass-status-loading">Checking pass coverage…</span>
+      </div>
       <div class="sat-tle">
         <code>${s.tle_line1.trim()}</code><br>
         <code>${s.tle_line2.trim()}</code>
       </div>
       ${s.notes ? `<div class="sat-notes">${s.notes}</div>` : ""}
       <div class="sat-actions">
-        <button class="btn btn-sm btn-primary" onclick="computePasses(${s.id}, this)">Compute passes</button>
+        <button class="btn btn-sm btn-secondary" id="btn-recompute-${s.id}" onclick="computePasses(${s.id}, this)">Recompute now</button>
         <button class="btn btn-sm btn-secondary" onclick="showGroundTrack(${s.id})">Show track</button>
         <button class="btn btn-sm btn-secondary" onclick="openSatelliteEditForm(${s.id})">Edit TLE</button>
         <button class="btn btn-sm btn-danger" onclick="deleteSatellite(${s.id})">Delete</button>
@@ -249,6 +252,28 @@ function renderSatellitesView(sats) {
       <div id="sat-compute-result-${s.id}" class="sat-compute-result"></div>
     </div>
   `).join("");
+
+  // Load pass status for each satellite asynchronously
+  for (const s of sats) {
+    if (s.is_active) _refreshPassStatus(s.id);
+  }
+}
+
+async function _refreshPassStatus(satId) {
+  const el = document.getElementById(`sat-pass-status-${satId}`);
+  if (!el) return;
+  try {
+    const s = await API.satellites.passStatus(satId);
+    if (s.needs_recompute && !s.passes_valid_until) {
+      el.innerHTML = `<span class="pass-status-stale">No passes computed — will auto-compute on next query</span>`;
+    } else if (s.needs_recompute) {
+      el.innerHTML = `<span class="pass-status-stale">⚠ Passes expiring soon · valid until ${fmtDateTime(s.passes_valid_until)} · ${s.pass_count} remaining</span>`;
+    } else {
+      el.innerHTML = `<span class="pass-status-ok">✓ ${s.pass_count} passes · valid until ${fmtDateTime(s.passes_valid_until)}</span>`;
+    }
+  } catch (_) {
+    el.innerHTML = "";
+  }
 }
 
 async function computePasses(satId, btn) {
@@ -260,14 +285,13 @@ async function computePasses(satId, btn) {
     const r = await API.satellites.computePasses(satId, { window_hours: 168, step_s: 60 });
     if (resultEl)
       resultEl.innerHTML = `<span style="color:var(--success)">✓ ${r.passes_found} passes found over ${r.tiles_checked} tiles (${r.elapsed_s}s)</span>`;
-    // Refresh next targets so the map can update
-    await refreshStats();
+    await Promise.all([refreshStats(), _refreshPassStatus(satId)]);
   } catch (e) {
     if (resultEl) resultEl.innerHTML = `<span style="color:var(--danger)">${e.message}</span>`;
     showError("Pass computation failed: " + e.message);
   } finally {
     btn.disabled = false;
-    btn.textContent = "Compute passes";
+    btn.textContent = "Recompute now";
   }
 }
 
@@ -371,7 +395,7 @@ async function loadOpportunities() {
   try {
     const ops = await API.stats.opportunities(30);
     if (ops.length === 0) {
-      container.innerHTML = `<p class="empty-msg">No upcoming passes. Run "Compute passes" for each satellite first.</p>`;
+      container.innerHTML = `<p class="empty-msg">No upcoming passes found for uncovered tiles. Passes are computed automatically — check that at least one active satellite with a valid TLE is registered.</p>`;
       return;
     }
     container.innerHTML = ops.map((op, i) => `

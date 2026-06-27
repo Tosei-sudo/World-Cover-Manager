@@ -44,6 +44,7 @@ const RealAPI = {
       const q = new URLSearchParams(params).toString();
       return _fetch(`/satellites/${id}/ground-track${q ? "?" + q : ""}`);
     },
+    passStatus: (id) => _fetch(`/satellites/${id}/pass-status`),
   },
   passes: {
     list: (params = {}) => {
@@ -144,6 +145,19 @@ const MockAPI = {
         satellite_id: id, window_hours: hours,
         tiles_checked: MOCK_TILES.filter(t => t.is_land && t.status === "NOT_STARTED").length,
         passes_found: count, elapsed_s: 0.42,
+      };
+    },
+    passStatus: async (id) => {
+      await _delay();
+      const now = new Date();
+      const satPasses = MOCK_PASSES.filter(p => p.satellite_id === id && new Date(p.pass_end) >= now);
+      const latest = satPasses.reduce((max, p) =>
+        !max || new Date(p.pass_end) > new Date(max) ? p.pass_end : max, null);
+      return {
+        satellite_id: id,
+        passes_valid_until: latest || null,
+        needs_recompute: !latest,
+        pass_count: satPasses.length,
       };
     },
     groundTrack: async (id, params = {}) => {
