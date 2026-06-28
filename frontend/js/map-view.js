@@ -128,10 +128,16 @@ function drawGroundTrack(satId, satName, points, swathKm) {
   trackLine.bindTooltip(`${satName} ground track`, { sticky: false, direction: "top" });
   trackLine.addTo(_trackLayerGroup);
 
-  // Swath corridor (buffered in degrees – approximate at low latitudes)
+  // Swath corridor: offset perpendicular to track (longitude direction, scaled by cos(lat))
   const halfSwathDeg = swathKm / 2 / 111;
-  const leftEdge  = points.map(p => [p.lat - halfSwathDeg, p.lon]);
-  const rightEdge = [...points].reverse().map(p => [p.lat + halfSwathDeg, p.lon]);
+  const leftEdge  = points.map(p => {
+    const halfLon = halfSwathDeg / Math.max(0.01, Math.cos(p.lat * Math.PI / 180));
+    return [p.lat, p.lon - halfLon];
+  });
+  const rightEdge = [...points].reverse().map(p => {
+    const halfLon = halfSwathDeg / Math.max(0.01, Math.cos(p.lat * Math.PI / 180));
+    return [p.lat, p.lon + halfLon];
+  });
   const swathPoly = L.polygon([...leftEdge, ...rightEdge], {
     color, weight: 0, fillColor: color, fillOpacity: 0.12,
   });

@@ -1,9 +1,11 @@
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 from pydantic import BaseModel, Field
 
 
 # ── Tile ──────────────────────────────────────────────────────────────────────
+
+TileStatus = Literal["NOT_STARTED", "IN_PROGRESS", "COMPLETED"]
 
 class TileBase(BaseModel):
     lat_min: float
@@ -14,7 +16,7 @@ class TileBase(BaseModel):
     center_lon: float
     tile_size: float = 10.0
     is_land: bool = True
-    status: str = "NOT_STARTED"
+    status: TileStatus = "NOT_STARTED"
     coverage_count: int = 0
     coverage_pct: float = 0.0
     last_captured_at: Optional[datetime] = None
@@ -26,7 +28,7 @@ class TileCreate(TileBase):
 
 
 class TilePatch(BaseModel):
-    status: Optional[str] = None
+    status: Optional[TileStatus] = None
     is_land: Optional[bool] = None
     coverage_count: Optional[int] = None
     last_captured_at: Optional[datetime] = None
@@ -61,9 +63,9 @@ class SatellitePatch(BaseModel):
     norad_id: Optional[int] = None
     tle_line1: Optional[str] = None
     tle_line2: Optional[str] = None
-    swath_width_km: Optional[float] = None
+    swath_width_km: Optional[float] = Field(None, gt=0)
     sensor_modes: Optional[str] = None
-    min_resolution_m: Optional[float] = None
+    min_resolution_m: Optional[float] = Field(None, gt=0)
     is_active: Optional[bool] = None
     notes: Optional[str] = None
 
@@ -116,6 +118,8 @@ class PassStatus(BaseModel):
 
 # ── Order ─────────────────────────────────────────────────────────────────────
 
+OrderStatus = Literal["PLANNED", "SCHEDULED", "IN_PROGRESS", "COMPLETED", "FAILED", "CANCELLED"]
+
 class OrderBase(BaseModel):
     center_lat: float = Field(..., ge=-90, le=90)
     center_lon: float = Field(..., ge=-180, le=180)
@@ -149,7 +153,7 @@ class OrderPatch(BaseModel):
     sun_elev_min: Optional[float] = None
     off_nadir_max: Optional[float] = None
     priority: Optional[int] = None
-    status: Optional[str] = None
+    status: Optional[OrderStatus] = None
     completed_at: Optional[datetime] = None
     notes: Optional[str] = None
 

@@ -88,10 +88,12 @@ def recompute_tile_coverage(tile, db: "Session") -> None:
             if not tile.last_captured_at:
                 tile.last_captured_at = datetime.now(tz=timezone.utc)
     elif tile.coverage_pct > 0:
-        if tile.status == "NOT_STARTED":
+        # Demote COMPLETED back to IN_PROGRESS when coverage falls below threshold
+        if tile.status in ("NOT_STARTED", "COMPLETED"):
             tile.status = "IN_PROGRESS"
     else:
-        if tile.status == "IN_PROGRESS":
+        # No coverage at all — revert to NOT_STARTED from any state
+        if tile.status in ("IN_PROGRESS", "COMPLETED"):
             tile.status = "NOT_STARTED"
 
 

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
@@ -16,7 +16,7 @@ def _apply_tle(sat: Satellite, line1: str, line2: str) -> None:
     sat.tle_line1 = line1.strip()
     sat.tle_line2 = line2.strip()
     sat.tle_epoch = parse_tle_epoch(line1)
-    sat.tle_updated_at = datetime.utcnow()
+    sat.tle_updated_at = datetime.now(tz=timezone.utc)
 
 
 def _swath_warning(swath_km: float, db: Session) -> str | None:
@@ -69,7 +69,7 @@ def create_satellite(
     sat.tle_line1 = body.tle_line1.strip()
     sat.tle_line2 = body.tle_line2.strip()
     sat.tle_epoch = parse_tle_epoch(body.tle_line1)
-    sat.tle_updated_at = datetime.utcnow()
+    sat.tle_updated_at = datetime.now(tz=timezone.utc)
     db.add(sat)
     db.commit()
     db.refresh(sat)

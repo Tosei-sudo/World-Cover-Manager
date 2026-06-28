@@ -14,7 +14,7 @@ Usage:
 
 import argparse
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 # Make the package importable when run directly
@@ -230,7 +230,7 @@ def _sample_satellites(db) -> list[Satellite]:
         sat = Satellite(
             **data,
             tle_epoch=parse_tle_epoch(data["tle_line1"]),
-            tle_updated_at=datetime.utcnow(),
+            tle_updated_at=datetime.now(tz=timezone.utc),
             is_active=True,
         )
         db.add(sat)
@@ -243,7 +243,7 @@ def _sample_satellites(db) -> list[Satellite]:
 # ---------------------------------------------------------------------------
 
 def _sample_orders(db, land_tiles: list[Tile]) -> None:
-    now = datetime.utcnow()
+    now = datetime.now(tz=timezone.utc)
     sensors = ["MULTISPECTRAL", "PANCHROMATIC", "SAR"]
 
     # Pick a few tiles to have in-progress or completed orders

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import (
     Boolean, Column, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 )
@@ -18,7 +18,7 @@ class Satellite(Base):
     tle_line1 = Column(String(100), nullable=False)
     tle_line2 = Column(String(100), nullable=False)
     tle_epoch = Column(DateTime, nullable=True)         # Parsed from TLE
-    tle_updated_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    tle_updated_at = Column(DateTime, nullable=False, default=lambda: datetime.now(tz=timezone.utc))
 
     # Sensor characteristics
     swath_width_km = Column(Float, nullable=False)      # Total cross-track swath (km)
@@ -27,7 +27,7 @@ class Satellite(Base):
 
     is_active = Column(Boolean, nullable=False, default=True)
     notes = Column(Text, nullable=True)
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(tz=timezone.utc))
 
     orders = relationship("Order", back_populates="satellite")
     passes = relationship("OrbitalPass", back_populates="satellite", cascade="all, delete-orphan")
@@ -45,7 +45,7 @@ class OrbitalPass(Base):
     pass_start = Column(DateTime, nullable=False)
     pass_end = Column(DateTime, nullable=False)
     duration_s = Column(Integer, nullable=False)        # pass_end - pass_start in seconds
-    computed_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    computed_at = Column(DateTime, nullable=False, default=lambda: datetime.now(tz=timezone.utc))
 
     satellite = relationship("Satellite", back_populates="passes")
     tile = relationship("Tile", back_populates="passes")
@@ -106,7 +106,7 @@ class Scene(Base):
     lon_min = Column(Float, nullable=False, index=True)
     lon_max = Column(Float, nullable=False, index=True)
 
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(tz=timezone.utc))
 
     order = relationship("Order", back_populates="scenes")
     satellite = relationship("Satellite", back_populates="scenes")
@@ -138,8 +138,8 @@ class Order(Base):
     # PLANNED | SCHEDULED | IN_PROGRESS | COMPLETED | FAILED | CANCELLED
     status = Column(String(20), nullable=False, default="PLANNED")
 
-    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
-    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = Column(DateTime, nullable=False, default=lambda: datetime.now(tz=timezone.utc))
+    updated_at = Column(DateTime, nullable=False, default=lambda: datetime.now(tz=timezone.utc), onupdate=lambda: datetime.now(tz=timezone.utc))
     completed_at = Column(DateTime, nullable=True)
     notes = Column(Text, nullable=True)
 

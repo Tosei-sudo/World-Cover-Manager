@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -62,18 +62,14 @@ def patch_order(order_id: int, body: OrderPatch, db: Session = Depends(get_db)):
 
     # Auto-set completed_at when transitioning to a terminal status
     if new_status in TERMINAL_STATUSES and not order.completed_at:
-        updates.setdefault("completed_at", datetime.utcnow())
+        updates.setdefault("completed_at", datetime.now(tz=timezone.utc))
 
     for field, value in updates.items():
         setattr(order, field, value)
 
-    # Propagate COMPLETED status to the tile
-    if new_status == "COMPLETED" and order.tile_id:
-        tile = db.get(Tile, order.tile_id)
-        if tile:
-            tile.status = "COMPLETED"
-            tile.coverage_count = tile.coverage_count + 1
-            tile.last_captured_at = datetime.utcnow()
+    # Tile status is managed exclusively via scene coverage (recompute_tile_coverage).
+    # Manually completing an order does NOT force the tile to COMPLETED — a scene
+    # footprint must be ingested to advance tile status through actual coverage data.
 
     db.commit()
     db.refresh(order)
@@ -85,5 +81,23 @@ def delete_order(order_id: int, db: Session = Depends(get_db)):
     order = db.get(Order, order_id)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+
+    tile_id = order.tile_id
     db.delete(order)
+    db.flush()
+
+    # Recompute tile status after order deletion
+    if tile_id:
+        tile = db.get(Tile, tile_id)
+        if tile:
+            from ..services.coverage import recompute_tile_coverage
+            recompute_tile_coverage(tile, db)
+            # If no scene coverage and no remaining active orders, revert to NOT_STARTED
+            remaining = db.query(Order).filter(
+                Order.tile_id == tile_id,
+                Order.status.notin_(["CANCELLED", "FAILED"]),
+            ).count()
+            if tile.coverage_pct == 0 and remaining == 0:
+                tile.status = "NOT_STARTED"
+
     db.commit()
