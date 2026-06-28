@@ -103,7 +103,14 @@ const MockAPI = {
   satellites: {
     list: async (params = {}) => {
       await _delay();
-      let sats = _deepClone(MOCK_SATELLITES);
+      const tileSize = (MOCK_TILES[0]?.tile_size ?? 10);
+      const tileWidthKm = tileSize * 111;
+      let sats = _deepClone(MOCK_SATELLITES).map(s => ({
+        ...s,
+        tile_coverage_warning: s.swath_width_km < tileWidthKm
+          ? `Swath width ${s.swath_width_km} km is narrower than the tile grid (${tileSize}° ≈ ${tileWidthKm.toFixed(0)} km). A single pass will not cover a full tile. Consider re-initialising with a smaller tile size (e.g. python init_db.py --reset, which will auto-select ≤${(s.swath_width_km/111).toFixed(1)}°).`
+          : null,
+      }));
       if (params.is_active !== undefined)
         sats = sats.filter(s => s.is_active === (params.is_active === "true" || params.is_active === true));
       return sats;
