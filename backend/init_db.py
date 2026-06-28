@@ -189,37 +189,37 @@ def generate_tiles(tile_size: float = 10.0) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 # These TLEs are representative examples for demonstration.
-# Refresh from https://celestrak.org/SATCAT/ or https://www.space-track.org
+# Replace with current TLEs from Space-Track or your internal TLE feed.
 _SAMPLE_SATELLITES = [
     dict(
-        name="Sentinel-2A",
-        norad_id=40697,
-        tle_line1="1 40697U 15028A   25170.50000000  .00000123  00000-0  63064-4 0  9999",
-        tle_line2="2 40697  98.5662 126.3044 0001055  89.1278 271.0024 14.30819878462521",
-        swath_width_km=290.0,
-        sensor_modes="MULTISPECTRAL",
-        min_resolution_m=10.0,
-        notes="ESA Sentinel-2A – 290 km swath, 10 m multispectral (example TLE).",
+        name="GRUS-1A",
+        norad_id=43802,
+        tle_line1="1 43802U 18092F   25170.50000000  .00001500  00000-0  12345-3 0  9990",
+        tle_line2="2 43802  97.5200 126.3000 0001200  90.0000 270.0000 15.19876543214321",
+        swath_width_km=70.0,
+        sensor_modes="MULTISPECTRAL,PANCHROMATIC",
+        min_resolution_m=2.5,
+        notes="Axelspace GRUS-1A – 70 km swath, 2.5 m MSS / 0.7 m PAN (example TLE).",
     ),
     dict(
-        name="Sentinel-2B",
-        norad_id=42063,
-        tle_line1="1 42063U 17013A   25170.50000000  .00000114  00000-0  55918-4 0  9999",
-        tle_line2="2 42063  98.5700 113.8445 0001024  83.5741 276.5596 14.30819878362159",
-        swath_width_km=290.0,
-        sensor_modes="MULTISPECTRAL",
-        min_resolution_m=10.0,
-        notes="ESA Sentinel-2B – 290 km swath, 10 m multispectral (example TLE).",
+        name="GRUS-1B",
+        norad_id=47941,
+        tle_line1="1 47941U 21028K   25170.50000000  .00001480  00000-0  11800-3 0  9990",
+        tle_line2="2 47941  97.5210 130.1000 0001150  91.0000 120.0000 15.20012345678901",
+        swath_width_km=70.0,
+        sensor_modes="MULTISPECTRAL,PANCHROMATIC",
+        min_resolution_m=2.5,
+        notes="Axelspace GRUS-1B – 70 km swath, 2.5 m MSS / 0.7 m PAN (example TLE).",
     ),
     dict(
-        name="Landsat 9",
-        norad_id=49260,
-        tle_line1="1 49260U 21088A   25170.50000000  .00000023  00000-0  46059-5 0  9999",
-        tle_line2="2 49260  98.2143  78.1459 0001356  92.1812 267.9534 14.57192027119043",
-        swath_width_km=185.0,
-        sensor_modes="MULTISPECTRAL,PANCHROMATIC,THERMAL",
-        min_resolution_m=15.0,
-        notes="USGS Landsat 9 – 185 km swath, 15 m pan / 30 m multispectral (example TLE).",
+        name="GRUS-1C",
+        norad_id=47942,
+        tle_line1="1 47942U 21028L   25170.50000000  .00001460  00000-0  11600-3 0  9990",
+        tle_line2="2 47942  97.5190 128.5000 0001180  92.0000 240.0000 15.20023456789012",
+        swath_width_km=70.0,
+        sensor_modes="MULTISPECTRAL,PANCHROMATIC",
+        min_resolution_m=2.5,
+        notes="Axelspace GRUS-1C – 70 km swath, 2.5 m MSS / 0.7 m PAN (example TLE).",
     ),
 ]
 
