@@ -6,3 +6,4 @@ pydantic-settings==2.6.1
 python-multipart==0.0.19
 skyfield==1.49
 numpy==2.2.1
+shapely>=2.0

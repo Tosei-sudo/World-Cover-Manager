@@ -53,7 +53,7 @@ def next_targets(
         .join(OrbitalPass, OrbitalPass.tile_id == Tile.id)
         .filter(
             Tile.is_land == True,               # noqa: E712
-            Tile.status == "NOT_STARTED",
+            Tile.status != "COMPLETED",
             OrbitalPass.pass_start > now,
         )
         .group_by(Tile.id)
@@ -71,7 +71,7 @@ def next_targets(
             db.query(Tile)
             .filter(
                 Tile.is_land == True,           # noqa: E712
-                Tile.status == "NOT_STARTED",
+                Tile.status != "COMPLETED",
                 ~Tile.id.in_(tile_ids_with_pass),
             )
             .order_by(func.abs(Tile.center_lat))
@@ -102,7 +102,7 @@ def next_opportunities(
         .join(Satellite, Satellite.id == OrbitalPass.satellite_id)
         .filter(
             Tile.is_land == True,               # noqa: E712
-            Tile.status == "NOT_STARTED",
+            Tile.status != "COMPLETED",
             OrbitalPass.pass_start > now,
             Satellite.is_active == True,         # noqa: E712
         )

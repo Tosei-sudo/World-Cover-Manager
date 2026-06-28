@@ -130,12 +130,3 @@ def delete_satellite(sat_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Satellite not found")
     db.delete(sat)
     db.commit()
-
-
-@router.delete("/{sat_id}", status_code=204)
-def delete_satellite(sat_id: int, db: Session = Depends(get_db)):
-    sat = db.get(Satellite, sat_id)
-    if not sat:
-        raise HTTPException(status_code=404, detail="Satellite not found")
-    db.delete(sat)
-    db.commit()

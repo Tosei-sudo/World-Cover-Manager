@@ -67,6 +67,15 @@ const RealAPI = {
     nextTargets:   (limit = 10) => _fetch(`/stats/next-targets?limit=${limit}`),
     opportunities: (limit = 20) => _fetch(`/stats/opportunities?limit=${limit}`),
   },
+  scenes: {
+    list: (params = {}) => {
+      const q = new URLSearchParams(params).toString();
+      return _fetch(`/scenes${q ? "?" + q : ""}`);
+    },
+    get:    (id)   => _fetch(`/scenes/${id}`),
+    create: (body) => _fetch("/scenes", { method: "POST", body: JSON.stringify(body) }),
+    delete: (id)   => _fetch(`/scenes/${id}`, { method: "DELETE" }),
+  },
 };
 
 // ── Mock API ──────────────────────────────────────────────────────────────────
@@ -257,6 +266,76 @@ const MockAPI = {
       return null;
     },
   },
+  scenes: {
+    list: async (params = {}) => {
+      await _delay();
+      let scenes = _deepClone(MOCK_SCENES);
+      if (params.order_id != null)
+        scenes = scenes.filter(s => s.order_id === Number(params.order_id));
+      if (params.satellite_id != null)
+        scenes = scenes.filter(s => s.satellite_id === Number(params.satellite_id));
+      return scenes.sort((a, b) => new Date(b.captured_at) - new Date(a.captured_at));
+    },
+    get: async (id) => {
+      await _delay();
+      const s = MOCK_SCENES.find(s => s.id === id);
+      if (!s) throw new Error("Scene not found");
+      return _deepClone(s);
+    },
+    create: async (body) => {
+      await _delay(200);
+      let bbox;
+      try { bbox = _polyBbox(body.footprint_geojson); }
+      catch (e) { throw new Error("Invalid footprint GeoJSON: " + e.message); }
+
+      const scene = {
+        id: _sceneIdSeq++,
+        created_at: new Date().toISOString(),
+        ...bbox,
+        ...body,
+      };
+      MOCK_SCENES.push(scene);
+
+      // Recompute coverage for intersecting land tiles
+      for (const tile of MOCK_TILES) {
+        if (!tile.is_land) continue;
+        if (tile.lat_min <= bbox.lat_max && tile.lat_max >= bbox.lat_min &&
+            tile.lon_min <= bbox.lon_max && tile.lon_max >= bbox.lon_min) {
+          _recomputeMockTileCoverage(tile);
+        }
+      }
+
+      // Mark linked order COMPLETED
+      if (body.order_id) {
+        const order = MOCK_ORDERS.find(o => o.id === body.order_id);
+        if (order && !["COMPLETED","FAILED","CANCELLED"].includes(order.status)) {
+          order.status = "COMPLETED";
+          if (!order.completed_at) order.completed_at = new Date().toISOString();
+        }
+      }
+
+      return _deepClone(scene);
+    },
+    delete: async (id) => {
+      await _delay();
+      const idx = MOCK_SCENES.findIndex(s => s.id === id);
+      if (idx === -1) throw new Error("Scene not found");
+      const scene = MOCK_SCENES[idx];
+      const bbox = {
+        lat_min: scene.lat_min, lat_max: scene.lat_max,
+        lon_min: scene.lon_min, lon_max: scene.lon_max,
+      };
+      MOCK_SCENES.splice(idx, 1);
+      for (const tile of MOCK_TILES) {
+        if (!tile.is_land) continue;
+        if (tile.lat_min <= bbox.lat_max && tile.lat_max >= bbox.lat_min &&
+            tile.lon_min <= bbox.lon_max && tile.lon_max >= bbox.lon_min) {
+          _recomputeMockTileCoverage(tile);
+        }
+      }
+      return null;
+    },
+  },
   stats: {
     coverage: async () => {
       await _delay();
@@ -286,7 +365,7 @@ const MockAPI = {
       }
       return _deepClone(
         MOCK_TILES
-          .filter(t => t.is_land && t.status === "NOT_STARTED")
+          .filter(t => t.is_land && t.status !== "COMPLETED")
           .sort((a, b) => {
             const pa = tileNextPass[a.id] ? new Date(tileNextPass[a.id]) : Infinity;
             const pb = tileNextPass[b.id] ? new Date(tileNextPass[b.id]) : Infinity;
@@ -299,7 +378,11 @@ const MockAPI = {
       await _delay();
       const now = new Date();
       const future = MOCK_PASSES
-        .filter(p => new Date(p.pass_start) > now)
+        .filter(p => {
+          if (new Date(p.pass_start) <= now) return false;
+          const tile = MOCK_TILES.find(t => t.id === p.tile_id);
+          return tile && tile.status !== "COMPLETED";
+        })
         .slice(0, limit);
       return future.map(p => {
         const tile = MOCK_TILES.find(t => t.id === p.tile_id);

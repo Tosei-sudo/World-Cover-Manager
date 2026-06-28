@@ -31,6 +31,7 @@ class Satellite(Base):
 
     orders = relationship("Order", back_populates="satellite")
     passes = relationship("OrbitalPass", back_populates="satellite", cascade="all, delete-orphan")
+    scenes = relationship("Scene", back_populates="satellite")
 
 
 class OrbitalPass(Base):
@@ -73,11 +74,42 @@ class Tile(Base):
     # NOT_STARTED | IN_PROGRESS | COMPLETED
     status = Column(String(20), nullable=False, default="NOT_STARTED")
     coverage_count = Column(Integer, nullable=False, default=0)
+    coverage_pct = Column(Float, nullable=False, default=0.0)
     last_captured_at = Column(DateTime, nullable=True)
     notes = Column(Text, nullable=True)
 
     orders = relationship("Order", back_populates="tile")
     passes = relationship("OrbitalPass", back_populates="tile", cascade="all, delete-orphan")
+
+
+class Scene(Base):
+    """An actual captured image footprint ingested after execution of an order.
+
+    The footprint is stored as a GeoJSON Polygon (coordinates in [lon, lat]
+    order per the GeoJSON spec).  Bounding-box columns (lat/lon_min/max) are
+    auto-computed on insert for efficient spatial pre-filtering.
+    """
+    __tablename__ = "scenes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    order_id = Column(Integer, ForeignKey("orders.id", ondelete="SET NULL"), nullable=True)
+    satellite_id = Column(Integer, ForeignKey("satellites.id", ondelete="SET NULL"), nullable=True)
+
+    footprint_geojson = Column(Text, nullable=False)
+    captured_at = Column(DateTime, nullable=False)
+    cloud_cover_pct = Column(Float, nullable=True)
+    notes = Column(Text, nullable=True)
+
+    # Bounding box for spatial pre-filtering
+    lat_min = Column(Float, nullable=False, index=True)
+    lat_max = Column(Float, nullable=False, index=True)
+    lon_min = Column(Float, nullable=False, index=True)
+    lon_max = Column(Float, nullable=False, index=True)
+
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    order = relationship("Order", back_populates="scenes")
+    satellite = relationship("Satellite", back_populates="scenes")
 
 
 class Order(Base):
@@ -113,3 +145,4 @@ class Order(Base):
 
     tile = relationship("Tile", back_populates="orders")
     satellite = relationship("Satellite", back_populates="orders")
+    scenes = relationship("Scene", back_populates="order")
