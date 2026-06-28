@@ -49,7 +49,7 @@
     <span class="stat-value" id="stat-pct">—</span>
   </div>
   <button class="btn btn-secondary btn-sm"
-          onclick="Promise.all([refreshTiles(),refreshOrders(),refreshSatellites(),refreshStats()])">↻</button>
+          onclick="Promise.all([refreshTiles(),refreshOrders(),refreshSatellites(),refreshStats(),refreshScenes()])">↻</button>
 </div>
 
 <!-- ── Main ────────────────────────────────────────────────────────────── -->
@@ -63,9 +63,11 @@
       <div class="legend-item"><span class="legend-swatch" style="background:#e8e8e8"></span>Not started</div>
       <div class="legend-item"><span class="legend-swatch" style="background:#f0a500"></span>In progress</div>
       <div class="legend-item"><span class="legend-swatch" style="background:#2ecc71"></span>Completed</div>
+      <div class="legend-item"><span class="legend-swatch" style="background:#fbbf24;border-color:#f59e0b"></span>Scene footprint</div>
     </div>
     <div id="map-toolbar">
       <button class="btn btn-secondary btn-sm" onclick="clearGroundTracks()">Clear tracks</button>
+      <button class="btn btn-secondary btn-sm" onclick="clearSceneFootprints()">Clear scenes</button>
       <button class="btn btn-secondary btn-sm" onclick="showNextTargets()">Next Targets</button>
     </div>
   </div>
@@ -98,7 +100,10 @@
   <div id="view-orders" class="view">
     <div class="view-header">
       <h2>Orders</h2>
-      <button class="btn btn-primary" onclick="openOrderForm()">+ New Order</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-secondary" onclick="openSceneForm()">+ Ingest Scene</button>
+        <button class="btn btn-primary" onclick="openOrderForm()">+ New Order</button>
+      </div>
     </div>
     <div id="orders-list"></div>
   </div>
@@ -271,6 +276,85 @@
     <div class="form-actions">
       <button type="button" class="btn btn-secondary" onclick="closeSatelliteForm()">Cancel</button>
       <button type="submit" class="btn btn-primary">Save</button>
+    </div>
+  </form>
+</div>
+
+<!-- ── Scene form panel ──────────────────────────────────────────────────── -->
+<div id="scene-form-panel" class="panel">
+  <button class="panel-close" onclick="closeSceneForm()" aria-label="Close">×</button>
+  <h3>Ingest Scene Footprint</h3>
+  <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">
+    Record the actual imaged area. Coverage is computed by intersecting the footprint
+    polygon with the tile grid — partial coverage is tracked precisely.
+  </p>
+  <form onsubmit="submitSceneForm(event)">
+    <input type="hidden" id="scf-order-id" />
+    <div class="form-grid">
+
+      <div class="form-group">
+        <label>Satellite</label>
+        <select id="scf-satellite">
+          <option value="">— none —</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Captured at *</label>
+        <input type="datetime-local" id="scf-captured-at" required />
+      </div>
+
+      <div class="form-group">
+        <label>Cloud cover (%)</label>
+        <input type="number" id="scf-cloud" min="0" max="100" step="0.1" placeholder="0" />
+      </div>
+      <div class="form-group">
+        <label>&nbsp;</label>
+        <div class="scene-mode-toggle">
+          <button type="button" id="scf-mode-corners" class="btn btn-sm btn-secondary active"
+            onclick="setSceneInputMode('corners')">4 Corners</button>
+          <button type="button" id="scf-mode-geojson" class="btn btn-sm btn-secondary"
+            onclick="setSceneInputMode('geojson')">GeoJSON</button>
+        </div>
+      </div>
+
+      <!-- Corner coordinate inputs -->
+      <div id="scf-corners-section" class="form-group full">
+        <label>Corner coordinates (clockwise: UL → UR → LR → LL)</label>
+        <table class="corners-table">
+          <thead><tr><th></th><th>Latitude</th><th>Longitude</th></tr></thead>
+          <tbody>
+            <tr><td>UL</td>
+              <td><input type="number" id="scf-lat1" step="any" placeholder="40.5" /></td>
+              <td><input type="number" id="scf-lon1" step="any" placeholder="139.8" /></td></tr>
+            <tr><td>UR</td>
+              <td><input type="number" id="scf-lat2" step="any" placeholder="41.0" /></td>
+              <td><input type="number" id="scf-lon2" step="any" placeholder="140.5" /></td></tr>
+            <tr><td>LR</td>
+              <td><input type="number" id="scf-lat3" step="any" placeholder="40.3" /></td>
+              <td><input type="number" id="scf-lon3" step="any" placeholder="141.0" /></td></tr>
+            <tr><td>LL</td>
+              <td><input type="number" id="scf-lat4" step="any" placeholder="39.8" /></td>
+              <td><input type="number" id="scf-lon4" step="any" placeholder="140.3" /></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- GeoJSON input -->
+      <div id="scf-geojson-section" class="form-group full" style="display:none">
+        <label>GeoJSON Polygon (coordinates: [lon, lat] per GeoJSON spec)</label>
+        <textarea id="scf-geojson" rows="6"
+          placeholder='{"type":"Polygon","coordinates":[[[139.8,40.5],[140.5,41.0],[141.0,40.3],[140.3,39.8],[139.8,40.5]]]}'
+          style="font-family:monospace;font-size:11px"></textarea>
+      </div>
+
+      <div class="form-group full">
+        <label>Notes</label>
+        <textarea id="scf-notes" placeholder="Optional notes…"></textarea>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button type="button" class="btn btn-secondary" onclick="closeSceneForm()">Cancel</button>
+      <button type="submit" class="btn btn-primary">Ingest Scene</button>
     </div>
   </form>
 </div>

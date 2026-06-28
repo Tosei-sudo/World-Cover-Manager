@@ -7,7 +7,9 @@
 let _allTiles      = [];
 let _allOrders     = [];
 let _allSatellites = [];
+let _allScenes     = [];
 let _currentView   = "map";
+let _sceneInputMode = "corners";
 
 // ── Startup ───────────────────────────────────────────────────────────────────
 
@@ -15,7 +17,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   _updateModeLabel();
   initMap();
   await Promise.all([refreshTiles(), refreshOrders(), refreshSatellites()]);
-  await refreshStats();
+  await Promise.all([refreshStats(), refreshScenes()]);
   switchView("map");
 });
 
@@ -63,6 +65,13 @@ async function refreshSatellites() {
   } catch (e) { showError("Failed to load satellites: " + e.message); }
 }
 
+async function refreshScenes() {
+  try {
+    _allScenes = await API.scenes.list();
+    drawSceneFootprints(_allScenes);
+  } catch (e) { console.warn("Could not load scenes:", e); }
+}
+
 async function refreshStats() {
   try {
     const s = await API.stats.coverage();
@@ -86,14 +95,20 @@ function onTileClick(tile) {
       <tr><td>Bounds</td><td>${tile.lat_min}°–${tile.lat_max}° N, ${tile.lon_min}°–${tile.lon_max}° E</td></tr>
       <tr><td>Centre</td><td>${tile.center_lat}°, ${tile.center_lon}°</td></tr>
       <tr><td>Status</td><td><span class="status-badge status-${tile.status.toLowerCase().replace("_","-")}">${tile.status.replace("_"," ")}</span></td></tr>
+      <tr><td>Coverage</td><td>${tile.coverage_pct > 0 ? tile.coverage_pct.toFixed(1) + "%" : "—"}</td></tr>
       <tr><td>Times covered</td><td>${tile.coverage_count}</td></tr>
       <tr><td>Last captured</td><td>${tile.last_captured_at ? new Date(tile.last_captured_at).toLocaleDateString() : "—"}</td></tr>
       ${tile.notes ? `<tr><td>Notes</td><td>${tile.notes}</td></tr>` : ""}
     </table>
     <div id="tile-passes-section" style="margin-bottom:10px"></div>
-    <button class="btn btn-primary" onclick="openOrderForm(${tile.id}, ${tile.center_lat}, ${tile.center_lon})">
-      + New Order for this tile
-    </button>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-primary" onclick="openOrderForm(${tile.id}, ${tile.center_lat}, ${tile.center_lon})">
+        + New Order
+      </button>
+      <button class="btn btn-secondary" onclick="openSceneForm(null, null, null, ${tile.center_lat}, ${tile.center_lon})">
+        Ingest Scene
+      </button>
+    </div>
   `;
   panel.classList.add("visible");
   _loadTilePasses(tile.id);
@@ -192,16 +207,18 @@ function renderOrdersPanel(orders) {
 function _progressButtons(order) {
   const next = { PLANNED:"SCHEDULED", SCHEDULED:"IN_PROGRESS", IN_PROGRESS:"COMPLETED" }[order.status];
   const fail = ["PLANNED","SCHEDULED","IN_PROGRESS"].includes(order.status);
+  const canIngest = !["FAILED","CANCELLED"].includes(order.status);
   return `
     ${next ? `<button class="btn btn-sm btn-success" onclick="advanceOrder(${order.id},'${next}')">→ ${next.replace("_"," ")}</button>` : ""}
     ${fail ? `<button class="btn btn-sm btn-warning" onclick="advanceOrder(${order.id},'FAILED')">FAILED</button>` : ""}
+    ${canIngest ? `<button class="btn btn-sm btn-secondary" onclick="openSceneForm(${order.id},${order.satellite_id || null})">Ingest Scene</button>` : ""}
   `;
 }
 
 async function advanceOrder(id, newStatus) {
   try {
     await API.orders.patch(id, { status: newStatus });
-    await Promise.all([refreshTiles(), refreshOrders(), refreshStats()]);
+    await Promise.all([refreshTiles(), refreshOrders(), refreshStats(), refreshScenes()]);
   } catch (e) { showError("Failed to update order: " + e.message); }
 }
 
@@ -534,6 +551,104 @@ async function submitOrderForm(e) {
     await Promise.all([refreshTiles(), refreshOrders(), refreshStats()]);
     switchView("orders");
   } catch (e) { showError("Failed to create order: " + e.message); }
+}
+
+// ── Scene form ────────────────────────────────────────────────────────────
+
+function setSceneInputMode(mode) {
+  _sceneInputMode = mode;
+  document.getElementById("scf-corners-section").style.display = mode === "corners" ? "" : "none";
+  document.getElementById("scf-geojson-section").style.display  = mode === "geojson" ? "" : "none";
+  document.getElementById("scf-mode-corners").classList.toggle("active", mode === "corners");
+  document.getElementById("scf-mode-geojson").classList.toggle("active", mode === "geojson");
+}
+
+function _populateSceneSatSelect() {
+  const sel = document.getElementById("scf-satellite");
+  if (!sel) return;
+  sel.innerHTML = `<option value="">— none —</option>` +
+    _allSatellites.map(s => `<option value="${s.id}">${s.name}</option>`).join("");
+}
+
+/**
+ * Open the scene ingest form.
+ * @param {number|null} orderId    - pre-fill order association
+ * @param {number|null} satId      - pre-fill satellite
+ * @param {string|null} capturedAt - ISO datetime string
+ * @param {number|null} _lat       - hint for tile context (unused but consistent with call signature)
+ * @param {number|null} _lon       - hint for tile context (unused but consistent with call signature)
+ */
+function openSceneForm(orderId = null, satId = null, capturedAt = null, _lat = null, _lon = null) {
+  _populateSceneSatSelect();
+  document.getElementById("scf-order-id").value    = orderId ?? "";
+  document.getElementById("scf-satellite").value   = satId  ?? "";
+  document.getElementById("scf-captured-at").value =
+    capturedAt ? capturedAt.slice(0, 16) : new Date().toISOString().slice(0, 16);
+  document.getElementById("scf-cloud").value  = "";
+  document.getElementById("scf-notes").value  = "";
+  document.getElementById("scf-geojson").value = "";
+  ["lat1","lon1","lat2","lon2","lat3","lon3","lat4","lon4"].forEach(k => {
+    const el = document.getElementById("scf-" + k);
+    if (el) el.value = "";
+  });
+  setSceneInputMode("corners");
+  document.getElementById("scene-form-panel").classList.add("visible");
+  closeTileDetail();
+}
+
+function closeSceneForm() {
+  document.getElementById("scene-form-panel").classList.remove("visible");
+}
+
+function _cornersToGeoJSON(lat1, lon1, lat2, lon2, lat3, lon3, lat4, lon4) {
+  return JSON.stringify({
+    type: "Polygon",
+    coordinates: [[[lon1,lat1],[lon2,lat2],[lon3,lat3],[lon4,lat4],[lon1,lat1]]],
+  });
+}
+
+async function submitSceneForm(e) {
+  e.preventDefault();
+  const orderId   = document.getElementById("scf-order-id").value;
+  const satId     = document.getElementById("scf-satellite").value;
+  const capturedAt= document.getElementById("scf-captured-at").value;
+  const cloud     = document.getElementById("scf-cloud").value;
+  const notes     = document.getElementById("scf-notes").value;
+
+  let footprintGeojson;
+  if (_sceneInputMode === "corners") {
+    const keys = ["lat1","lon1","lat2","lon2","lat3","lon3","lat4","lon4"];
+    const vals = keys.map(k => {
+      const v = parseFloat(document.getElementById("scf-" + k).value);
+      return isNaN(v) ? null : v;
+    });
+    if (vals.some(v => v === null)) {
+      showError("Please enter all 4 corner coordinates.");
+      return;
+    }
+    footprintGeojson = _cornersToGeoJSON(...vals);
+  } else {
+    footprintGeojson = document.getElementById("scf-geojson").value.trim();
+    if (!footprintGeojson) { showError("Please paste a GeoJSON polygon."); return; }
+    try { JSON.parse(footprintGeojson); }
+    catch (err) { showError("Invalid JSON: " + err.message); return; }
+  }
+
+  const body = {
+    order_id:        orderId ? Number(orderId) : null,
+    satellite_id:    satId   ? Number(satId)   : null,
+    footprint_geojson: footprintGeojson,
+    captured_at:     capturedAt ? new Date(capturedAt).toISOString() : new Date().toISOString(),
+    cloud_cover_pct: cloud ? Number(cloud) : null,
+    notes:           notes || null,
+  };
+
+  try {
+    await API.scenes.create(body);
+    closeSceneForm();
+    await Promise.all([refreshTiles(), refreshOrders(), refreshStats(), refreshScenes()]);
+    showInfo("Scene ingested — tile coverage updated.");
+  } catch (err) { showError("Failed to ingest scene: " + err.message); }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

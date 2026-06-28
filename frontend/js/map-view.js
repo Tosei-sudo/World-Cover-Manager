@@ -12,8 +12,9 @@ const STATUS_COLORS = {
 const TRACK_COLORS = ["#e74c3c", "#3498db", "#9b59b6", "#1abc9c", "#f39c12"];
 
 let _map = null;
-let _tileLayerGroup = null;
+let _tileLayerGroup  = null;
 let _trackLayerGroup = null;
+let _sceneLayerGroup = null;
 
 function initMap() {
   if (_map) return;
@@ -27,6 +28,7 @@ function initMap() {
   }
 
   _tileLayerGroup  = L.layerGroup().addTo(_map);
+  _sceneLayerGroup = L.layerGroup().addTo(_map);
   _trackLayerGroup = L.layerGroup().addTo(_map);
 }
 
@@ -49,9 +51,51 @@ function renderMapTiles(tiles) {
 }
 
 function _tileTooltip(tile) {
-  return `<b>Tile #${tile.id}</b><br>
+  let tip = `<b>Tile #${tile.id}</b><br>
     ${tile.lat_min}°–${tile.lat_max}° N, ${tile.lon_min}°–${tile.lon_max}° E<br>
     Status: <b>${tile.status.replace("_", " ")}</b> · Covered: ${tile.coverage_count}×`;
+  if (tile.coverage_pct > 0)
+    tip += `<br>Footprint coverage: <b>${tile.coverage_pct.toFixed(1)}%</b>`;
+  return tip;
+}
+
+// ── Scene footprints ───────────────────────────────────────────────────────
+
+/**
+ * Draw ingested scene footprints as semi-transparent amber polygons.
+ * Replaces any previously drawn scene layer.
+ */
+function drawSceneFootprints(scenes) {
+  if (!_map) return;
+  _sceneLayerGroup.clearLayers();
+  if (!scenes || scenes.length === 0) return;
+
+  for (const scene of scenes) {
+    try {
+      const geom = JSON.parse(scene.footprint_geojson);
+      const ring = geom.type === "Feature" ? geom.geometry.coordinates[0] : geom.coordinates[0];
+      // GeoJSON is [lon, lat]; Leaflet wants [lat, lon]
+      const latLons = ring.slice(0, -1).map(c => [c[1], c[0]]);
+      const capturedDate = scene.captured_at
+        ? new Date(scene.captured_at).toLocaleDateString()
+        : "—";
+      const cloudInfo = scene.cloud_cover_pct != null
+        ? `<br>Cloud: ${scene.cloud_cover_pct}%`
+        : "";
+      L.polygon(latLons, {
+        color: "#f59e0b",
+        fillColor: "#fbbf24",
+        fillOpacity: 0.28,
+        weight: 2,
+      })
+        .bindPopup(`<b>Scene #${scene.id}</b><br>Captured: ${capturedDate}${cloudInfo}`)
+        .addTo(_sceneLayerGroup);
+    } catch { /* skip malformed */ }
+  }
+}
+
+function clearSceneFootprints() {
+  if (_sceneLayerGroup) _sceneLayerGroup.clearLayers();
 }
 
 // ── Ground track ───────────────────────────────────────────────────────────

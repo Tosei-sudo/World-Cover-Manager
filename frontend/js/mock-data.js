@@ -53,7 +53,7 @@ function _buildTiles() {
           center_lat: Math.round(cLat * 10000) / 10000,
           center_lon: Math.round(cLon * 10000) / 10000,
           tile_size: MOCK_TILE_SIZE, is_land: true,
-          status: "NOT_STARTED", coverage_count: 0,
+          status: "NOT_STARTED", coverage_count: 0, coverage_pct: 0,
           last_captured_at: null, notes: null,
         });
         id++;
@@ -70,6 +70,7 @@ if (MOCK_TILES.length >= 3) {
   const now = new Date();
   MOCK_TILES[0].status = "COMPLETED";
   MOCK_TILES[0].coverage_count = 1;
+  MOCK_TILES[0].coverage_pct = 100;
   MOCK_TILES[0].last_captured_at = new Date(now - 28 * 86400e3).toISOString();
   MOCK_TILES[1].status = "IN_PROGRESS";
 }
@@ -146,6 +147,66 @@ function _generateMockPasses() {
 }
 
 const MOCK_PASSES = _generateMockPasses();
+
+// ── Scenes ─────────────────────────────────────────────────────────────────
+
+let _sceneIdSeq = 1;
+const MOCK_SCENES = [];
+
+/**
+ * Extract bounding box from a GeoJSON Polygon string.
+ * Returns { lat_min, lat_max, lon_min, lon_max }.
+ */
+function _polyBbox(geojsonStr) {
+  const geom = JSON.parse(geojsonStr);
+  const coords = geom.type === "Feature"
+    ? geom.geometry.coordinates[0]
+    : geom.coordinates[0];
+  const lats = coords.map(c => c[1]);
+  const lons = coords.map(c => c[0]);
+  return {
+    lat_min: Math.min(...lats), lat_max: Math.max(...lats),
+    lon_min: Math.min(...lons), lon_max: Math.max(...lons),
+  };
+}
+
+/**
+ * Recompute coverage_pct for one tile from all stored mock scenes.
+ * Uses bbox intersection as an approximation (the real backend uses Shapely).
+ */
+function _recomputeMockTileCoverage(tile) {
+  const scenesForTile = MOCK_SCENES.filter(s =>
+    s.lat_min <= tile.lat_max && s.lat_max >= tile.lat_min &&
+    s.lon_min <= tile.lon_max && s.lon_max >= tile.lon_min
+  );
+
+  const tileArea = (tile.lat_max - tile.lat_min) * (tile.lon_max - tile.lon_min);
+  if (tileArea <= 0) return;
+
+  let covered = 0;
+  for (const s of scenesForTile) {
+    const lMin = Math.max(s.lat_min, tile.lat_min);
+    const lMax = Math.min(s.lat_max, tile.lat_max);
+    const nMin = Math.max(s.lon_min, tile.lon_min);
+    const nMax = Math.min(s.lon_max, tile.lon_max);
+    if (lMax > lMin && nMax > nMin) covered += (lMax - lMin) * (nMax - nMin);
+  }
+
+  tile.coverage_pct = Math.min(100, Math.round(covered / tileArea * 10000) / 100);
+
+  const COMPLETE_THRESHOLD = 80;
+  if (tile.coverage_pct >= COMPLETE_THRESHOLD) {
+    if (tile.status !== "COMPLETED") {
+      tile.status = "COMPLETED";
+      tile.coverage_count = (tile.coverage_count || 0) + 1;
+      if (!tile.last_captured_at) tile.last_captured_at = new Date().toISOString();
+    }
+  } else if (tile.coverage_pct > 0) {
+    if (tile.status === "NOT_STARTED") tile.status = "IN_PROGRESS";
+  } else {
+    if (tile.status === "IN_PROGRESS") tile.status = "NOT_STARTED";
+  }
+}
 
 // ── Orders ─────────────────────────────────────────────────────────────────
 

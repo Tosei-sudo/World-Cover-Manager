@@ -483,6 +483,51 @@ header nav button.active {
   max-width: 96vw;
 }
 
+/* ── Scene form ──────────────────────────────────────────────────────────── */
+#scene-form-panel {
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 500px;
+  max-width: 96vw;
+}
+
+.scene-mode-toggle { display: flex; gap: 6px; }
+.scene-mode-toggle .active { background: var(--primary); color: #fff; }
+
+.corners-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  margin-top: 6px;
+}
+.corners-table th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding: 4px 6px 4px 0;
+  text-transform: uppercase;
+  letter-spacing: .3px;
+}
+.corners-table td {
+  padding: 3px 6px 3px 0;
+  vertical-align: middle;
+}
+.corners-table td:first-child {
+  font-weight: 700;
+  color: var(--text-muted);
+  font-size: 11px;
+  width: 28px;
+}
+.corners-table input {
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 12px;
+}
+
 /* ── Error toast ─────────────────────────────────────────────────────────── */
 #error-toast {
   position: fixed;

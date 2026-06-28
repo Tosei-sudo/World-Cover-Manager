@@ -16,6 +16,7 @@ class TileBase(BaseModel):
     is_land: bool = True
     status: str = "NOT_STARTED"
     coverage_count: int = 0
+    coverage_pct: float = 0.0
     last_captured_at: Optional[datetime] = None
     notes: Optional[str] = None
 
@@ -159,6 +160,27 @@ class OrderOut(OrderBase):
     created_at: datetime
     updated_at: datetime
     completed_at: Optional[datetime] = None
+    model_config = {"from_attributes": True}
+
+
+# ── Scene ─────────────────────────────────────────────────────────────────────
+
+class SceneCreate(BaseModel):
+    order_id: Optional[int] = None
+    satellite_id: Optional[int] = None
+    footprint_geojson: str
+    captured_at: datetime
+    cloud_cover_pct: Optional[float] = Field(None, ge=0, le=100)
+    notes: Optional[str] = None
+
+
+class SceneOut(SceneCreate):
+    id: int
+    lat_min: float
+    lat_max: float
+    lon_min: float
+    lon_max: float
+    created_at: datetime
     model_config = {"from_attributes": True}
 
 
