@@ -84,6 +84,18 @@ async function refreshStats() {
   } catch (e) { console.warn("Stats unavailable:", e); }
 }
 
+// ── HTML escape helper (XSS prevention) ──────────────────────────────────────
+
+function _esc(s) {
+  if (s == null) return "";
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 // ── Tile interaction ──────────────────────────────────────────────────────────
 
 function onTileClick(tile) {
@@ -98,7 +110,7 @@ function onTileClick(tile) {
       <tr><td>Coverage</td><td>${tile.coverage_pct > 0 ? tile.coverage_pct.toFixed(1) + "%" : "—"}</td></tr>
       <tr><td>Times covered</td><td>${tile.coverage_count}</td></tr>
       <tr><td>Last captured</td><td>${tile.last_captured_at ? new Date(tile.last_captured_at).toLocaleDateString() : "—"}</td></tr>
-      ${tile.notes ? `<tr><td>Notes</td><td>${tile.notes}</td></tr>` : ""}
+      ${tile.notes ? `<tr><td>Notes</td><td>${_esc(tile.notes)}</td></tr>` : ""}
     </table>
     <div id="tile-passes-section" style="margin-bottom:10px"></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -190,8 +202,8 @@ function renderOrdersPanel(orders) {
         <span class="status-badge status-${o.status.toLowerCase().replace("_","-")}">${o.status.replace("_"," ")}</span>
         <span class="order-priority">P${o.priority}</span>
       </div>
-      <div class="order-name">${o.target_name || `${o.center_lat}°, ${o.center_lon}°`}</div>
-      ${sat ? `<div class="order-meta" style="color:#3b82f6">🛰 ${sat.name}</div>` : ""}
+      <div class="order-name">${_esc(o.target_name) || `${o.center_lat}°, ${o.center_lon}°`}</div>
+      ${sat ? `<div class="order-meta" style="color:#3b82f6">🛰 ${_esc(sat.name)}</div>` : ""}
       <div class="order-meta">
         ${o.sensor_mode || "—"} · ${o.resolution_m ? o.resolution_m + " m" : "—"} · Cloud ≤${o.max_cloud_pct}%
       </div>
@@ -242,25 +254,25 @@ function renderSatellitesView(sats) {
   container.innerHTML = sats.map(s => `
     <div class="satellite-card${s.is_active ? "" : " inactive"}">
       <div class="sat-card-header">
-        <span class="sat-name">${s.name}</span>
+        <span class="sat-name">${_esc(s.name)}</span>
         ${s.norad_id ? `<span class="sat-norad">NORAD #${s.norad_id}</span>` : ""}
         <span class="status-badge ${s.is_active ? "status-completed" : "status-cancelled"}">${s.is_active ? "ACTIVE" : "INACTIVE"}</span>
       </div>
       <div class="sat-params">
         <span>Swath: <b>${s.swath_width_km} km</b></span>
         <span>Res: <b>${s.min_resolution_m ? s.min_resolution_m + " m" : "—"}</b></span>
-        <span>Modes: <b>${s.sensor_modes || "—"}</b></span>
+        <span>Modes: <b>${_esc(s.sensor_modes) || "—"}</b></span>
         <span>TLE epoch: <b>${s.tle_epoch ? new Date(s.tle_epoch).toLocaleDateString() : "—"}</b></span>
       </div>
-      ${s.tile_coverage_warning ? `<div class="sat-swath-warning">⚠ ${s.tile_coverage_warning}</div>` : ""}
+      ${s.tile_coverage_warning ? `<div class="sat-swath-warning">⚠ ${_esc(s.tile_coverage_warning)}</div>` : ""}
       <div id="sat-pass-status-${s.id}" class="sat-pass-status">
         <span class="pass-status-loading">Checking pass coverage…</span>
       </div>
       <div class="sat-tle">
-        <code>${s.tle_line1.trim()}</code><br>
-        <code>${s.tle_line2.trim()}</code>
+        <code>${_esc(s.tle_line1.trim())}</code><br>
+        <code>${_esc(s.tle_line2.trim())}</code>
       </div>
-      ${s.notes ? `<div class="sat-notes">${s.notes}</div>` : ""}
+      ${s.notes ? `<div class="sat-notes">${_esc(s.notes)}</div>` : ""}
       <div class="sat-actions">
         <button class="btn btn-sm btn-secondary" id="btn-recompute-${s.id}" onclick="computePasses(${s.id}, this)">Recompute now</button>
         <button class="btn btn-sm btn-secondary" onclick="showGroundTrack(${s.id})">Show track</button>

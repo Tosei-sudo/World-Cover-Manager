@@ -159,8 +159,16 @@ def compute_passes(
 
         lat_ok = (sat_lats >= tile.lat_min - half_swath_lat) & \
                  (sat_lats <= tile.lat_max + half_swath_lat)
-        lon_ok = (sat_lons >= tile.lon_min - half_swath_lon) & \
-                 (sat_lons <= tile.lon_max + half_swath_lon)
+
+        # Antimeridian-safe longitude check: normalise into [lo, lo+360)
+        lo = tile.lon_min - half_swath_lon
+        hi = tile.lon_max + half_swath_lon
+        if hi - lo >= 360:
+            lon_ok = np.ones(len(sat_lons), dtype=bool)
+        else:
+            shifted = (sat_lons - lo) % 360
+            lon_ok = shifted <= (hi - lo)
+
         covered = lat_ok & lon_ok
 
         # Detect rising/falling edges to find pass boundaries
@@ -171,9 +179,13 @@ def compute_passes(
 
         for s, e in zip(starts_idx, ends_idx):
             e_inc = e - 1  # inclusive end index
+            if e_inc < s:
+                continue
             p_start = times_dt[s]
             p_end = times_dt[e_inc]
             dur = int((p_end - p_start).total_seconds())
+            if dur == 0:  # single-timestep pass — not actionable
+                continue
             results.append(PassEvent(tile_id=tile.id, pass_start=p_start, pass_end=p_end, duration_s=dur))
 
     elapsed = time.perf_counter() - t0
