@@ -4,12 +4,17 @@
 
 // ── State ─────────────────────────────────────────────────────────────────────
 
-let _allTiles      = [];
-let _allOrders     = [];
-let _allSatellites = [];
-let _allScenes     = [];
-let _currentView   = "map";
+let _allTiles       = [];
+let _allOrders      = [];
+let _allSatellites  = [];
+let _allScenes      = [];
+let _currentView    = "map";
 let _sceneInputMode = "corners";
+
+// Table pagination state
+let _filteredTiles  = [];
+let _tablePage      = 0;
+const _PAGE_SIZE    = 250;
 
 // ── Startup ───────────────────────────────────────────────────────────────────
 
@@ -158,11 +163,26 @@ function closeTileDetail() {
 
 // ── Table view ────────────────────────────────────────────────────────────────
 
+function onTileById(id) {
+  const tile = _allTiles.find(t => t.id === id);
+  if (tile) onTileClick(tile);
+}
+
 function renderTileTable(tiles) {
+  _filteredTiles = tiles;
+  _tablePage = 0;
+  _renderTablePage();
+}
+
+function _renderTablePage() {
   const tbody = document.querySelector("#tile-table tbody");
   if (!tbody) return;
-  tbody.innerHTML = tiles.map(t => `
-    <tr onclick="onTileClick(${JSON.stringify(t).replace(/"/g,'&quot;')}); switchView('map');" style="cursor:pointer">
+
+  const start    = _tablePage * _PAGE_SIZE;
+  const pageRows = _filteredTiles.slice(start, start + _PAGE_SIZE);
+
+  tbody.innerHTML = pageRows.map(t => `
+    <tr onclick="onTileById(${t.id}); switchView('map');" style="cursor:pointer">
       <td>${t.id}</td>
       <td>${t.center_lat}°, ${t.center_lon}°</td>
       <td><span class="status-badge status-${t.status.toLowerCase().replace("_","-")}">${t.status.replace("_"," ")}</span></td>
@@ -170,6 +190,30 @@ function renderTileTable(tiles) {
       <td>${t.last_captured_at ? new Date(t.last_captured_at).toLocaleDateString() : "—"}</td>
     </tr>
   `).join("");
+
+  _renderPagination();
+}
+
+function _renderPagination() {
+  const el = document.getElementById("table-pagination");
+  if (!el) return;
+
+  const total      = _filteredTiles.length;
+  const totalPages = Math.max(1, Math.ceil(total / _PAGE_SIZE));
+  const start      = _tablePage * _PAGE_SIZE + 1;
+  const end        = Math.min(start + _PAGE_SIZE - 1, total);
+
+  el.innerHTML = `
+    <button class="btn btn-sm btn-secondary" onclick="_prevPage()" ${_tablePage === 0 ? "disabled" : ""}>◀</button>
+    <span class="pagination-info">${start}–${end} / ${total} tiles · Page ${_tablePage + 1} / ${totalPages}</span>
+    <button class="btn btn-sm btn-secondary" onclick="_nextPage()" ${_tablePage >= totalPages - 1 ? "disabled" : ""}>▶</button>
+  `;
+}
+
+function _prevPage() { if (_tablePage > 0) { _tablePage--; _renderTablePage(); } }
+function _nextPage() {
+  const totalPages = Math.ceil(_filteredTiles.length / _PAGE_SIZE);
+  if (_tablePage < totalPages - 1) { _tablePage++; _renderTablePage(); }
 }
 
 function filterTable() {

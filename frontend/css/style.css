@@ -154,13 +154,14 @@ header nav .btn-nav-link:hover {
 #map { flex: 1; width: 100%; }
 
 /* Table view */
-#view-table { padding: 16px; overflow-y: auto; }
+#view-table { display: flex; flex-direction: column; overflow: hidden; padding: 16px; gap: 12px; }
+.table-scroll-wrap { flex: 1; overflow-y: auto; min-height: 0; }
 .table-toolbar {
   display: flex;
   gap: 10px;
-  margin-bottom: 12px;
   flex-wrap: wrap;
   align-items: center;
+  flex-shrink: 0;
 }
 .table-toolbar input, .table-toolbar select {
   padding: 6px 10px;
@@ -194,6 +195,37 @@ header nav .btn-nav-link:hover {
 }
 #tile-table tr:last-child td { border-bottom: none; }
 #tile-table tbody tr:hover { background: #f0f7ff; }
+
+/* Pagination bar */
+.pagination-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 13px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+.pagination-info { font-variant-numeric: tabular-nums; }
+
+/* Floating map tooltip (canvas layer hover) */
+#map-tile-tooltip {
+  display: none;
+  position: fixed;
+  z-index: 9000;
+  background: rgba(15, 23, 41, 0.9);
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 6px 10px;
+  border-radius: 6px;
+  pointer-events: none;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(0,0,0,.35);
+}
 
 /* Orders view */
 #view-orders { padding: 16px; overflow-y: auto; }
